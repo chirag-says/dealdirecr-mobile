@@ -1,0 +1,1142 @@
+# Mobile app — handoff
+
+Written 2026-08-05, updated 2026-08-07 (M7-M9), updated 2026-08-07 (M11-M13,
+M10 skipped for now), updated 2026-08-08 (M15-M22 scoped from a feature-parity
+audit against the website, same day M15–M17 were implemented — see §8).
+Point a new session at this file first, then
+[`../README.md`](../README.md) and [`API_CONTRACT.md`](API_CONTRACT.md).
+
+> **Read [`HANDOFF_AUDIT_2026-08-09.md`](HANDOFF_AUDIT_2026-08-09.md) before
+> trusting anything below about auth, agreements, or rewards redemption.** An
+> auth-flow audit on 2026-08-09 found that password reset, the OTP-delivery
+> copy, buyer registration and referral attribution were all built from
+> `client-next/src/utils/api.js`'s **unused** helpers rather than from the pages
+> that actually run, and are broken on the wire. It also found that the backend
+> in this working tree differs from the one deployed at `origin/main` on three
+> surfaces the app depends on. Where that file disagrees with this one, it is
+> right; the corrections it lists are inlined below at each affected claim.
+
+The plan of record is [`../../MOBILE_APP_ARCHITECTURE_PLAN.md`](../../MOBILE_APP_ARCHITECTURE_PLAN.md),
+which defines milestones M0–M14. This file says where we actually are against
+it. **M15–M22 (below, §8) are not in that document** — they were scoped
+2026-08-08 from a direct website-vs-mobile feature audit and extend the plan
+rather than amend it. Treat §8 as the plan of record for that range until it
+is folded into the architecture doc. **M15, M16 and M17 are done** (M16/M17
+each minus one map-related item still blocked on the M4 dev-client rebuild,
+§5.1); M18–M22 remain scope only.
+
+---
+
+## 1. Status in one table
+
+| Milestone | Scope | State |
+|---|---|---|
+| M0 | Contract lock, tokens, toolchain | **done** |
+| M1 | App shell, navigation, design system | **done** |
+| M2 | Transport + authentication | **done** |
+| M3 | Property discovery (search, filters, infinite scroll) | **done** |
+| M4 | Property detail, gallery, map | **detail, gallery, attributes done. Map held** (§2.5) |
+| M5 | Favorites, saved searches, notifications | **done** (§2.6) |
+| M6 | Chat | **done** (§2.7) |
+| M7 | Profile, settings, rewards | **done** (§2.9) |
+| M8 | Owner mode: listings and uploads | **done** (§2.10) |
+| M9 | Leads and analytics | **done** (§2.11) |
+| M10 | Agreements | **withdrawn from the product**, not merely skipped — see audit §4.2 |
+| M11 | Projects, units, campaigns, bookings | **done** (§2.12) |
+| M12 | Deep linking, offline, performance | **core pieces done** (§2.13) |
+| M13 | Push notifications | **client-side/local done, server push still blocked** (§2.14) |
+| M14 | Store readiness and release | not started |
+
+**Working screens today:** Home, Search, property detail + gallery, Saved
+(interested list + saved searches), Messages (list + thread), notifications,
+the four auth screens, the tab shell, profile/settings/rewards, the full
+owner surface (my listing, add/edit, leads, analytics), and the full projects
+vertical (list, detail, unit types, group-buy campaigns, bookings, my
+bookings). The property detail locator map and M14 are still `Placeholder`
+stubs. **M10 (agreements) is the only milestone in M4–M13 not started.**
+Corrected 2026-08-09: it is not merely "skipped by instruction." The backend
+mount `app.use("/api/agreements", agreementRoutes)` is **commented out** in this
+working tree (`backend/server.js:869`) under a comment recording a client
+decision on 2026-08-01 to withdraw the agreement generator, alongside the
+website's own `agreements/page.js` returning 404 and three navbar links removed.
+It is still mounted on `origin/main`, i.e. live in production today, so the next
+deploy is what closes it. Building a mobile client for it would ship a feature
+the website deliberately hides. See audit §4.2.
+
+---
+
+## 2. What exists in the codebase right now
+
+### 2.1 Foundation (M0–M2, complete and stable)
+
+- `src/api/` — typed endpoint registry (`endpoints/_contract.ts` + one file per
+  domain), axios client, error normalisation, TanStack Query setup, query keys.
+  **Every backend route the app will ever call is already typed here.** Wiring a
+  feature means writing a hook, not discovering an API.
+- `src/auth/` — `AuthProvider`, cookie capture/restore via
+  `@react-native-cookies/cookies` + SecureStore, zod schemas for every auth form.
+- `src/theme/` — colors (semantic roles, light/dark), typography, spacing/radius/
+  elevation, motion (springs, not durations), scrim gradients.
+- `src/ui/` — 22 primitives. Screen, Text, Button, Input, Select, Sheet, Card,
+  Badge, Avatar, Image, Skeleton, EmptyState, ErrorState, Chip, PriceLabel,
+  RangeSlider, plus four Home-era additions (§2.8).
+- `src/storage/` — three MMKV instances (cache / prefs / drafts) with a
+  logout-scoped clear that deliberately spares preferences.
+
+### 2.2 Property discovery (M3, complete)
+
+- `features/properties/` — `adapters.ts` (80-field backend model → flat
+  `PropertySummary`), `api.ts`, `hooks.ts` (`usePropertyFeed`, infinite +
+  deduped), `PropertyCard`, `PropertyList`, `PropertyStrip`.
+- `features/search/` — `filters.ts` (verified param mapping, price bands),
+  `SearchBar`, `FilterSheet`, `SuggestionList`, MMKV recent searches.
+
+### 2.3 Builder projects (early M11, new this session)
+
+`src/features/projects/` is a **complete data layer** for the project list:
+
+- `types.ts` — `ProjectSummary`
+- `adapters.ts` — `adaptProject`, cover-image fallback chain, builder narrowing
+- `api.ts` — `fetchProjects` against `GET /projects` (same call the website makes)
+- `hooks.ts` — `useRecentProjects`
+- `components/ProjectCard.tsx`, `components/ProjectRail.tsx`
+
+**Not done for M11:** project detail, unit types, floor plans, group-buy
+campaigns (join/exit + the 10-per-15-min limiter), bookings, payment-proof
+upload. All five `app/projects/*` screens are still stubs.
+
+### 2.5 Property detail (M4, done except the map)
+
+`app/property/[id]/index.tsx` and `app/property/[id]/gallery.tsx`, built on
+`features/properties/`:
+
+- `types.ts` / `adapters.ts` — `PropertyDetail` extends `PropertySummary`
+  rather than mirroring the ~80 backend fields; it carries `raw: Property` for
+  the field map to read declaratively (below), and lifts only what needs real
+  decisions: gallery flattening, owner contact, address lines.
+- `fieldMap.ts` + `DetailAttributes.tsx` — the declarative attribute table, 8
+  sections / ~60 fields. **Presence decides what renders, not `categoryName`**:
+  the taxonomy refs are corrupt (§3.4), so a mislabelled listing would render
+  the wrong half of its data if category picked the field set. A section with
+  no fillable rows disappears rather than rendering empty.
+- `DetailHero.tsx` — paged `FlatList` carousel (not a mapped `ScrollView`: a
+  listing can carry up to 65 images across `images[]` and every
+  `categorizedImages` bucket), tapping through to `gallery.tsx`'s full-screen
+  pinch-zoom viewer (`ZoomableImage.tsx`). The gallery route reads through the
+  same cached query the detail screen already populated, so opening it costs
+  no extra request and — this is the one that matters — no extra view count.
+- `hooks.ts`'s `usePropertyDetail` disables every automatic refetch
+  (`staleTime: Infinity`, `refetchOnMount/Reconnect: false`) because
+  `GET /properties/:id` **increments `views` on every call**. `refresh()`
+  stays available for a deliberate pull.
+- `interest.ts` + `DetailActions.tsx` — see §3.2. No heart icon; a labelled
+  button with a consequence line, optimistic with rollback, surfaces the
+  backend's own 400 message (five-listing cap, own listing, already marked)
+  rather than trying to predict it client-side.
+- `ReportSheet.tsx` — preset reasons that satisfy the backend's 10-character
+  minimum, editable.
+
+**Redesigned 2026-08-09**, structure only — no data, query or endpoint changed:
+
+- `DetailHeader.tsx` (new) — the nav bar. The back button used to live in the
+  hero and scroll away with it, leaving a several-thousand-pixel page with no
+  way out. It now stays, cross-fading from a dark disc over the photo to an
+  opaque bar carrying the listing's location, driven by the scroll offset as a
+  shared value. It also owns the status-bar style flip, which is the one part
+  of the transition that is discrete rather than continuous. **Opaque, not
+  blurred** — `expo-blur` is a native module and `ui/Gradient.tsx` explains what
+  adding one costs; the collapsed bar is what iOS itself falls back to under
+  Reduce Transparency.
+- `DetailHero.tsx` — parallax on scroll, top-anchored stretch on overscroll,
+  both off under Reduce Motion. The content block below is opaque and paints
+  after it, which is what lets the photo grow underneath without a clipping
+  container.
+- `ExpandableText.tsx` (new) — descriptions clamp to six lines. Line count is
+  measured with a hidden unclamped copy because `onTextLayout` on a clamped
+  `Text` does not report the same thing on both platforms.
+- Surfaces (`DetailFacts`, `DetailAttributes`, `DetailOwner`) dropped their
+  outlines for `Card bordered={false} radius="xl"` plus hairline separators
+  inset from the row's leading edge. The page background sits one step down the
+  neutral ramp from `surface` precisely so this works — see `theme/colors.ts`.
+- `DetailActions.tsx` lost Share (now in the nav bar) and Report (now a quiet
+  footer link, after the thing it refers to). Four equal-weight icons beside the
+  primary button read as a toolbar of options rather than as one decision. The
+  bar reports its own height so the scroll content ends clear of it instead of
+  guessing at a constant.
+- `ui/Tag.tsx` (new) — amenities and nearby places were rendered with `Chip`,
+  which is a `Pressable` with `accessibilityRole="button"`, so VoiceOver
+  announced twenty dead controls per listing. `Tag` is the same visual family
+  with no role. `Card` gained `bordered` and `radius`; both default to the old
+  behaviour, so no other call site moved.
+
+**Unverified on device.** Typecheck and lint pass; the parallax, the header
+cross-fade and the expand animation have not been run on hardware.
+
+**Not done:** the locator map (§1.17, C1). Held for a dev-client rebuild —
+`react-native-webview` and `expo-location` are native modules, and Chirag's
+device workflow runs on `expo start --tunnel`, which ships JS only (§5.1).
+Chirag confirmed "keep the locator" for C1 when asked.
+
+**Untested on a device:** the gallery's pinch/pan gesture handoff (pan is
+disabled while at rest so the carousel can still page beneath it; enabled once
+zoomed) and the property detail action bar's layout. Both are reasoned
+through, not observed running.
+
+### 2.6 Saved, saved searches, and notifications (M5, done)
+
+`features/saved/`, `features/savedSearches/`, `features/notifications/`;
+`app/(tabs)/saved.tsx`, `app/notifications.tsx`.
+
+- **Saved is "Interested," not "Favourites."** See §3.2 — one backend list,
+  two names. The tab's first segment is labelled Interested; the count line
+  ("3 of 5 used") is functional, since the cap makes this screen where a user
+  comes to make room, not decoration.
+- **Saved searches only expose city, price band, and rent/sale.** The alert
+  matcher (`propertyController.js:484`) reads five stored filter fields but
+  only three actually match anything, and `availableFor` silently misses every
+  "Sell"-spelled listing when saved as "sale" (§3.4's spelling problem, a
+  second time). Offering a control that quietly fails half the time is worse
+  than not offering it. `isInert` on a saved search (no filter the matcher
+  reads) disables its alert switch and says why, rather than promising alerts
+  that can never fire.
+- **The backend's `isActive` toggle is deliberately wired to nothing.**
+  `GET /saved-searches/mine` filters to `isActive: true`, so flipping a search
+  off would drop it from the only endpoint that can ever list it again — a
+  delete with extra steps. `PUT .../notifyEmail|notifyInApp` is the reversible
+  control actually exposed.
+- **Notifications badge is counted from the list**, not from
+  `GET /notifications/unread-count` — no such endpoint exists; `unreadCount`
+  is summed client-side from the same rows the screen renders, capped at
+  "99+" since the list itself is hard-capped at the 100 most recent. Read
+  routes are PATCH (`/notifications/:id/read`, `/notifications/mark-all/read`)
+  — the website's own helper calls PUT paths that 404.
+
+`src/lib/htmlEntities.ts` — extracted here because chat (§2.7) needed the
+identical decode a second time: two backend code paths (`express-validator`'s
+`.escape()` on saved-search names, `chatController`'s hand-rolled `escapeHtml`
+on message text) both produce the same five HTML entities.
+
+### 2.7 Chat (M6, done)
+
+`src/socket/` (the transport) and `features/chat/`; `app/(tabs)/chat.tsx`,
+`app/chat/[conversationId].tsx`. `socket.io-client@4.8.3` added — pure JS, no
+native module, so this did **not** need a dev-client rebuild.
+
+- **`socketManager.ts` is a plain module, not a hook or context value** — one
+  socket for the whole app, matching architecture plan §1.8. `SocketProvider`
+  (mounted in `app/_layout.tsx`, inside `AuthProvider`) only drives lifecycle:
+  connect on `authenticated` + foreground, disconnect on `guest` + background.
+  Every screen reads the connection through `useSocketStatus` /
+  `useOnlineUserIds` / `useIsUserOnline`, which work with no provider present.
+- **The handshake re-runs on every `connect`, not just the first one.** The
+  socket JWT (`GET /chat/socket-token`) lives 5 minutes, so caching it across a
+  background/foreground cycle would mean authenticating with an almost-certainly-
+  expired token. Socket.IO's own reconnection (capped exponential backoff) is
+  left on for transport drops; the app-level handshake hooks into its
+  `connect` event every time, first or reconnect alike.
+- **`auth_error` gets exactly one retry, then a session failure** — per the
+  plan's "do not retry blindly." A second consecutive failure calls
+  `socket.disconnect()` (which also halts Socket.IO's own reconnect loop) and
+  hands off to `refreshUser()`, the only way to learn whether the real session
+  cookie is still good.
+- **`useMessageThread` merges three sources into one list**: REST history
+  (`GET /chat/messages/:id`, paginated OLDER by increasing page number, each
+  page oldest-first internally — assembling one oldest-first list means
+  reversing PAGE order, not item order), a live tail from `receive_message`
+  scoped by room membership, and this device's own optimistic sends. Send is
+  REST-then-emit exactly per the plan: persist first, then fan out the
+  server's own saved object over the socket — never the other way around.
+- **`visit_request` / `visit_confirmation` render as a distinct card**, not a
+  bubble with a button bolted on (the website's actual treatment). The Accept
+  action also tracks whether a later `visit_confirmation` already exists in
+  the thread and hides itself once one does — the website's own `canAcceptVisit`
+  has no such memory and would offer Accept on the same request forever.
+- **Property detail's "Message owner" now calls `useStartConversation`**,
+  wired into `DetailActions.tsx` from §2.5, closing the loop the plan
+  describes ("M4 for entry from property detail").
+- **Corrected in `types/backend/chat.ts`:** `StartConversationRequest`
+  declared `ownerId` as required; the controller never reads it (derives the
+  owner from the property, by explicit design, to prevent IDOR) — dropped.
+
+**Flagged, not fixed:** `send_message`, `typing`, and `stop_typing` on the
+backend trust client-supplied identity fields (`data.message.sender`,
+`data.userId`) instead of verifying them against the authenticated socket,
+unlike `join_conversation`, which does check DB participation. Blast radius is
+limited to conversations an attacker is already a genuine participant in, but
+within that room they could forge a message appearing to come from the other
+participant. This app only ever emits its own REST-validated data, so it isn't
+exploitable from here — it's a backend hardening item, spun off separately
+rather than fixed in this session.
+
+**Untested on a device:** the whole feature. Socket lifecycle across a real
+background/foreground cycle, the inverted `FlatList`'s footer-is-visually-top
+behaviour, and the keyboard-avoidance offset (`HEADER_HEIGHT` in the thread
+screen is a measured estimate) all need verification on a physical device
+before this is called solid.
+
+### 2.8 Home screen + design system
+
+New UI primitives, all generic and reusable:
+
+| File | Purpose |
+|---|---|
+| `src/ui/Gradient.tsx` | Linear gradients via RN's `experimental_backgroundImage`. **No native module** — deliberately, see §5.1 |
+| `src/ui/Scrim.tsx` | Gradient overlay for text on photos |
+| `src/ui/PressableScale.tsx` | Press feedback as scale, not opacity |
+| `src/ui/Rail.tsx` | The one horizontal scroller: peek, snap, gutters |
+| `src/lib/scrollReveal.tsx` | Deferred mounting — the rate-limit mechanism, §5.2 |
+
+Home feature (`src/features/home/`):
+
+- `Hero.tsx` — full-bleed photo, colour-graded scrim, search trigger, Buy/Rent/Post
+- `usePopularListings.ts` — ranks by `views`, client-side (§3.3)
+- `cities.ts` + `useCityCounts.ts` — 12 city tiles, **live counts**, spelling
+  variants merged client-side (§3.5)
+- `CityGrid.tsx`, `AboutDealDirect.tsx`, `CtaBanner.tsx`
+- `collections.ts` + `useCollection.ts` + `CollectionRail.tsx` — **built, tested,
+  and NOT currently rendered.** A registry of 15 curated rails (Luxury, Starter
+  Homes, Sea View…), each gated on live result count so a rail that cannot fill
+  itself renders nothing. One `COLLECTIONS.map()` away from being live. Do not
+  delete it without asking.
+
+`features/properties/recentlyViewed.ts` — MMKV history, snapshots the card
+fields rather than storing ids, **because refetching would inflate the backend's
+view counter** (the same counter Popular Listings ranks on).
+
+Current Home order: Hero → Popular Listings → Builder Projects → Why DealDirect
+→ Explore by City → CTA.
+
+### 2.9 Profile, settings, rewards (M7, done)
+
+`features/profile/`, `features/rewards/`; `app/(tabs)/profile.tsx`,
+`app/settings/*`, `app/rewards/index.tsx`.
+
+- **No `useProfile` query.** `AuthProvider` already holds the current user
+  from its cold-start `GET /users/me` probe; every mutation here calls
+  `refreshUser()` on success instead of maintaining a second cache of the same
+  document.
+- **Edit profile lives inline on the Settings screen**, not on its own route.
+  No such route was scaffolded in M0, the form is four fields (name, phone,
+  bio, photo) plus an email-notifications toggle, and a save button that is
+  visibly dirty-or-not reads better than a navigation round trip for that.
+  `preferences` goes over as a JSON string field on the same multipart
+  request — `updateProfile` (userController.js:922) reads it that way; it is
+  not in the `updateProfile` endpoint's doc comment because that comment only
+  covers the file field.
+- **The owner-upgrade OTP flow is a `Sheet`, not a route**, opened from the
+  buyer/user role's card on the Profile tab. Two-step (`send-upgrade-otp` /
+  `verify-upgrade-otp`), gated client-side on `user.isVerified` since the
+  backend's `requireVerified` would 400 first anyway — this just saves the
+  round trip.
+- **`transactions` and `referrals` are read defensively.** Both controllers
+  spread a service result directly into the envelope (see
+  `types/backend/rewards.ts`), so the exact key names were not confirmed
+  against a live response this session. The hooks try the plausible key names
+  and fall back to an empty list/zero rather than crash if the real key
+  differs — pin this down against production data before trusting the
+  Activity section's completeness.
+- **`referralLink` is shared as-is**, never rewritten into a deep link — it
+  points at the website by backend design (built from `CLIENT_URL`), and
+  rewriting it would break attribution for a recipient without the app.
+- **Delete account requires typing `DELETE`** rather than a single
+  confirmation tap, given App Store policy requires this screen exist at all
+  but says nothing about how easy reaching it should be.
+
+### 2.10 Owner mode: listings and uploads (M8, done)
+
+`features/listings/`; `app/owner/properties.tsx`,
+`app/owner/property/new.tsx`, `app/owner/property/[id]/edit.tsx`.
+
+Added `expo-image-picker` and `expo-image-manipulator` — both native modules,
+so **this milestone also needs the dev-client rebuild** already pending for
+the M4 map (§5.1). Neither works in the JS-only `--tunnel` bundle.
+
+- **`add` and `edit` are NOT the same contract.** `POST /properties/add`
+  sanitises through a strict field-name whitelist
+  (`PROPERTY_ALLOWED_FIELDS`, propertyController.js:42) before
+  `Property.create`; `PUT /properties/my-properties/:id`
+  (`updateMyProperty`, propertyController.js:1258) has **no whitelist at
+  all** and writes whatever reaches `req.body` through Mongoose schema
+  binding directly. `src/features/listings/formData.ts` has the full
+  field-by-field reasoning; the short version is two separate builders,
+  `buildAddFormData` and `buildEditFormData`, and they are not
+  interchangeable.
+- **Several whitelist entries do not correspond to any real schema path** —
+  `floor` (schema: `floorNo`), `age`/`availability` (schema has neither),
+  flat `builtUpArea`/`carpetArea`/etc. (schema wants them nested under
+  `area`), `parkingCovered`/`parkingOpen` as flats (schema wants `parking`
+  nested). Mongoose's default strict mode drops these silently — no error,
+  no save. The form only offers fields that are confirmed to reach the
+  document: the intersection of the whitelist and
+  `backend/models/Property.js`, not the whitelist alone.
+- **Editing `address.line`/`state`/`pincode` is not possible through this
+  backend.** `updateMyProperty` unconditionally rebuilds `data.address` from
+  flat top-level `city`/`locality`/`landmark`/`latitude`/`longitude` and
+  stuffs anything sent as a nested `address` object into a non-schema
+  `address.full` string. This is a server limitation, not a client one — the
+  edit form does not offer those three fields, and does not silently drop a
+  user's edit to them because it never asks.
+- **Edit-flow images are a real landmine, handled, not just documented.**
+  `updateMyProperty` rebuilds `categorizedImages` from
+  `existingCategorizedImages` (JSON) plus any newly uploaded files on *every*
+  call, then rebuilds the flat `images` array from that. Omitting
+  `existingCategorizedImages` reads to the controller as "this listing now
+  has zero photos" and wipes the gallery. `buildEditFormData` always sends
+  the full current photo set back under that key. This app has no per-room
+  categorisation UI, so every photo — existing or newly added — lives in a
+  single `other` bucket key within whichever of `residential`/`commercial`
+  the listing's `categoryName` selects.
+- **An owner account is capped at one listing, server-side** (the atomic
+  check-and-create in `addProperty`). `useMyProperties` is written against
+  the list response anyway so a future cap relaxation needs no client change,
+  but `app/owner/properties.tsx` in practice renders zero or one card.
+- **Edit reads from `useMyProperties`, never `GET /properties/:id`** — that
+  endpoint increments the view counter on every call (§2.5), and an owner
+  opening their own listing to edit it should not count as a view. An owner
+  has at most one listing, so searching the cached list by id is cheap.
+- **Draft autosave is add-only.** `draftStorage` (MMKV, pre-provisioned in M0
+  for exactly this) writes on every field change; a resumed draft is offered
+  once on mount via a confirm dialog rather than silently applied, so a stale
+  abandoned draft cannot clobber a fresh start. Editing an existing listing
+  has no local-only state worth protecting the same way.
+- **Client-side compression, not just a picker.** `expo-image-manipulator`
+  resizes to a 1600px long edge and re-encodes at JPEG quality 0.7 before
+  upload — the backend's 10 MB per-file cap is easy to exceed with an
+  uncompressed modern camera photo, especially with several picked at once.
+- **Only a flat photo gallery is offered**, not the backend's per-room
+  categorisation (`categorizedImages.residential.kitchen`, etc.). Building
+  that UI was out of scope for this pass; see the image-landmine note above
+  for why "no categorisation UI" and "images survive an edit" are not in
+  tension.
+- **Category and property type are closed choices** (`Residential` /
+  `Commercial`, and a fixed list per category in `features/listings/types.ts`)
+  rather than free text or the corrupt taxonomy refs (§3.4). `categoryName`
+  and `propertyTypeName` are stored as denormalised strings on the schema
+  either way, so this loses nothing the backend would have used.
+
+### 2.11 Leads and analytics (M9, done)
+
+`features/leads/`; `app/owner/leads/index.tsx`, `app/owner/leads/[id].tsx`,
+`app/owner/analytics.tsx`.
+
+- **Lead detail has no endpoint of its own.** `GET /leads` (paginated) is the
+  only read path; the detail screen finds its lead in the same infinite-query
+  cache the list screen already populated rather than issuing a second
+  request the backend cannot serve.
+- **`stats` (on `GET /leads`) and the shape from `GET /leads/analytics` are
+  two different, unrelated objects** — the list's stats block is
+  `{new,contacted,...,total,today}` from `leadController.js:484`, typed
+  locally in `app/owner/leads/index.tsx` since the shared contract types it
+  as `unknown`; the analytics screen uses the separately-typed
+  `LeadAnalyticsResponse`. Do not assume one can stand in for the other.
+- **No chart library was added.** The mobile app has none installed, and five
+  summary numbers plus a status breakdown did not justify a new dependency —
+  `app/owner/analytics.tsx`'s bars are plain `View`s sized by proportion.
+- **Marking a lead viewed happens on open**, once, guarded by `lead.isViewed`
+  so revisiting an already-read lead does not re-fire the mutation.
+
+### 2.12 Projects, units, campaigns, bookings (M11, done)
+
+`features/projects/*` (extended: `projectDetail.ts`, `campaigns.ts`,
+`bookings.ts`, `components/ProjectList.tsx`, `components/ProjectListCard.tsx`
+new this session); `app/projects/index.tsx`, `app/projects/[id].tsx`,
+`app/projects/unit/[unitTypeId].tsx`, `app/projects/campaign/[campaignId].tsx`,
+`app/projects/booking/[bookingId].tsx`, `app/projects/bookings.tsx`.
+
+- **`app/projects/bookings.tsx` ("My bookings") was not in the M0 route
+  scaffold.** Screen #42 in the architecture plan's build order, added here
+  since `bookingsEndpoints.mine` already existed with no screen calling it.
+  Linked from the Profile tab, alongside a new "Projects" row — both reachable
+  by any signed-in user, not owner-gated, since booking a unit is a buyer
+  action.
+- **There is no "am I already a member" endpoint for a group-buy campaign.**
+  `join`, `exit` and `detail` are the only three calls; `detail` carries no
+  per-user membership flag. `app/projects/campaign/[campaignId].tsx` therefore
+  tracks join/exit only for what happens in the CURRENT session (component
+  state, not persisted) and otherwise lets the backend's own 400
+  ("already a member" / "not a member") surface as the error message rather
+  than guessing membership client-side. A user who joined in an earlier
+  session sees "Join" as the enabled button here, same as before joining —
+  tapping it gets the backend's real answer.
+- **Booking detail has no GET-by-id endpoint either.** `bookingsEndpoints` only
+  has `mine` (list) and the two write routes, so
+  `app/projects/booking/[bookingId].tsx` finds its booking in the
+  `useMyBookings()` cache — populated already, since `useCreateBooking`
+  invalidates that same query key on success and the booking sheet navigates
+  straight here afterward.
+- **Join/exit are declared with `rateLimit: 'groupBuy'`, but that limiter does
+  not actually reach them.** Corrected 2026-08-09: `groupBuyLimiter` is mounted
+  at `/api/group-buy/projects/:id/join|exit` (`backend/server.js:705-706`) and
+  campaigns are mounted at `/api/campaigns` (`:880`). No `/api/group-buy` path
+  exists, so join/exit are covered only by the 500-per-15-min global limiter.
+  The campaign screen's handling of `ApiError.retryAfterSeconds` is still
+  correct and worth keeping — it just fires on the global tier, far less often
+  than the annotation implies.
+- **Payment proof upload (campaign) and payment screenshot (booking) are two
+  separate flows on two separate models**, not one shared component — a
+  campaign's `paymentProof` field and a booking's `payment.screenshotUrl`
+  are unrelated data on unrelated documents, even though both are "upload a
+  payment screenshot" from a user's point of view.
+
+### 2.13 Deep linking, offline, performance (M12, core pieces done)
+
+`src/api/persistence.ts`, `src/lib/useNetworkStatus.ts`,
+`src/ui/OfflineBanner.tsx`, `src/features/notifications/targets.ts` (extended).
+
+- **Scheme-based deep linking (`dealdirect://property/123` etc.) needed no new
+  code.** Expo Router resolves a URL against the file-based route tree
+  automatically once `scheme` is set in `app.config.js` (already was, M0), so
+  a cold start into a shared link lands directly on that screen without
+  passing through `app/index.tsx`'s bootstrap gate at all.
+- **Universal links (`https://dealdirect.in/property/123` opening the app
+  instead of a browser) are NOT done, and nothing was added toward them this
+  session.** That needs `ios.associatedDomains` / `android.intentFilters` in
+  `app.config.js` AND a hosted `apple-app-site-association` file (requires the
+  Apple Developer Team ID) plus `assetlinks.json` (requires the Android
+  signing certificate's SHA-256 fingerprint) on the production web domain.
+  Neither credential is available from this session, and a wrong or
+  placeholder value in either file is actively worse than absent — it fails
+  silently and is hard to debug later. Left undone rather than faked.
+- **Query cache persistence** (`PersistQueryClientProvider` in
+  `app/_layout.tsx`, backed by the `cacheStorage` MMKV instance M0 already
+  provisioned) means a cold start with no connectivity still shows
+  properties/projects/leads/rewards/etc. from the last successful fetch,
+  capped at 24 hours old. **Chat is deliberately excluded** — see
+  `shouldPersistQuery`'s doc comment: a socket-fed conversation shown as
+  "current" after being disconnected for hours is a worse read than an empty
+  state.
+- **FlashList migration covers the genuinely long, unbounded lists**:
+  property search results, the new projects list, leads, saved/interested,
+  saved searches, and notifications. Chat's inverted thread list, the gallery
+  carousel, and short bounded lists (sessions, my bookings) were left on
+  `FlatList` — FlashList v2 (New Architecture only, which this app runs)
+  buys nothing on a list capped at a handful of rows, and the chat thread's
+  pagination/keyboard behaviour is already flagged untested on a device;
+  changing its list implementation in the same pass it is unverified in was
+  not worth the risk.
+- **Offline is a banner, not a sync engine.** `OfflineBanner` (mounted once in
+  `app/_layout.tsx`) tells the user before they tap something that a write
+  will fail; the persisted query cache handles the read side; every write
+  already produces the existing `network`-kind `ApiError` message
+  ("No connection. Check your network and try again.", `src/api/errors.ts`).
+  No offline write queue, no optimistic-then-reconcile beyond what individual
+  features (like `useRemoveInterest`) already did on their own.
+- **Not done: Sentry, a memoisation pass, and device performance
+  verification.** No Sentry DSN is configured anywhere in this repo, so
+  wiring the SDK now would be dead code with nowhere to report to — skipped
+  rather than half-built. A repo-wide memoisation audit was judged lower
+  value than the concrete items above and was not attempted. "Performance
+  budgets met on a mid-range Android device" cannot be verified without a
+  device, same as everything else this session.
+
+### 2.14 Push notifications (M13, client-side/local done; server push still blocked)
+
+`src/notifications/*` (new), `src/features/chat/activeConversation.ts` (new).
+
+- **Read this before assuming more works than does.** `SocketProvider`
+  disconnects the socket on background BY DESIGN (M6, for session-token
+  reasons unrelated to push). That means the socket-driven local notification
+  built here — a banner for a new chat message — can only ever fire while the
+  app is in the FOREGROUND. There is no live connection to receive an event
+  from otherwise. This is not a bug to fix later; it is the actual ceiling of
+  what "push" can mean without the backend addition below.
+- **True server-initiated push (notification arrives with the app closed) is
+  UNCHANGED from the architecture plan's original finding: blocked.** No FCM/
+  APNs device-token model, no push credentials, no registration route exist
+  on this backend (`MOBILE_APP_ARCHITECTURE_PLAN.md` §0 finding #6). Nothing
+  in this session added one, and nothing here pretends to — nowhere in the UI
+  claims a notification will arrive while the app is closed or killed.
+- **What was built:** a permission request (asked once ever, on first opening
+  the Messages tab — not on launch — tracked in `prefsStorage` so it never
+  re-prompts after the first answer either way), a foreground local
+  notification for `receive_message` when the sender isn't you and the
+  message isn't for the conversation currently open on screen (tracked via
+  `setActiveConversationId`/`getActiveConversationId`, set by the chat thread
+  screen on focus/blur), and tap-to-navigate back into that conversation.
+- **`resolveNotificationTarget` (`features/notifications/targets.ts`) gained a
+  `leads` target.** "New Interest on Your Property" notifications
+  (`type: "interest"`, propertyController.js:1599) carry a `propertyId` but
+  NO lead id — routing an owner to the public property page for their own
+  listing was the wrong destination for this one type; it now routes to the
+  leads list instead. This also means `resolveNotificationTarget` is now the
+  one place both the notifications screen AND (if a future session adds a
+  data-carrying local notification for something other than chat) any local
+  tap handler would resolve a destination through — kept as one function
+  rather than two.
+- **`expo-notifications` is a THIRD new native module this session**, after
+  `expo-image-picker`/`expo-image-manipulator` (M8). All three need the same
+  dev-client rebuild — see the consolidated note in §5.1.
+
+**Untested on a device, everything in this update (M7–M9, M11–M13).** This
+pass verified with `tsc --noEmit`, `expo lint`, and
+`expo export --platform android` only — no dev client was available to run
+it. Beyond the M8 items already flagged: the group-buy join/exit rate-limit
+messaging, the booking payment-screenshot round trip, query cache
+rehydration on an actual cold start with no connectivity, and the entire
+local-notification permission/foreground-banner/tap-routing chain all need
+verification on a physical device before any of them are called solid.
+
+---
+
+## 3. Backend blockers found by measurement
+
+These were all found by probing production, not by reading code. Every one is
+recorded with evidence in the file that depends on it.
+
+### 3.1 `listingType` filter is written but NOT DEPLOYED — highest priority
+
+`backend/controllers/propertyController.js` correctly expands rent/sale across
+all six schema spellings. Corrected 2026-08-09: it is **committed** (`ab5ec1b`,
+"feat(search): honour listingType on /properties/search") but **not deployed** —
+`main` is 4 commits ahead of `origin/main`, and deploy is a Hostinger git import
+from `origin/main`. The conclusion is unchanged: the live API ignores the param,
+and `?listingType=sale`, `Sell`, `rent` and `Rent` all return the same 36
+results. Only the stated reason was stale.
+
+**Effect:** the Buy and Rent buttons — the primary CTA — open unfiltered results.
+Home is correct because `useCollection` and the rails guard intent client-side;
+the browse screen is not.
+
+**Fix:** deploy the existing change. No new code.
+
+### 3.2 There is no PRIVATE save — corrected 2026-08-05
+
+**The earlier version of this section was wrong** and said no endpoint could add
+to the saved list. Read `getSavedProperties` (propertyController.js:1726): it
+queries `{ "interestedUsers.user": userId }` — the same array `markInterested`
+pushes to. **Saved and interested are one list under two names.**
+`DELETE /saved/:id` and `DELETE /interested/:id` are the same operation written
+twice.
+
+So the write path exists: `POST /properties/interested/:id`. What does not exist
+is a *private* one. Adding to this list creates a `Lead`, emails the owner, and
+hands over the user's name, email and phone. The backend also caps it at **five
+listings per user**, rejecting the sixth with a 400.
+
+**Effect:** no heart icon, for a different reason than previously recorded. A
+heart means private, free, unlimited and quietly undoable, and this action is
+none of those. M4 ships it as a labelled button with a consequence line
+(`DetailActions.tsx`). Undo works, but does not unsend the notification or
+delete the lead.
+
+**Still worth a backend change request** if a genuine private bookmark is
+wanted, since the current list cannot serve both purposes. M5's saved tab is
+NOT blocked: it can render this list today.
+
+### 3.3 No `sort=views`
+
+`/properties/search` accepts `newest`, `priceAsc`, `priceDesc` only. `views` is
+real data with a real spread (166 down to 5 across 36 listings) and is now
+carried on `PropertySummary`.
+
+**Current workaround:** `usePopularListings` fetches one page of 100 and sorts
+locally. Exact today; degrades to "most viewed among the newest 100" later, and
+the section subtitle changes itself to say so.
+
+**Fix:** one line in the controller's sort map. Collapses that whole file into an
+ordinary query.
+
+### 3.4 Taxonomy refs are corrupt (known since M3)
+
+`category` / `subcategory` / `propertyType` are null on 15 of 36 listings and
+point at the wrong document on the other 21. The app therefore ships **no
+category or property-type filter** and uses free-text terms instead.
+
+**Fix:** backfill from the correct `categoryName` / `propertyTypeName` columns.
+Makes all three filters work with zero client change.
+
+### 3.5 `address.city` is not normalised on write
+
+Live values include `Bangalore` (9) and `Bengaluru` (6) for one city, `Kolkata`
+and `kolkata`, `Howrah ` with a trailing space, and `Ahamdabad`.
+
+**Current workaround:** `cities.ts` carries an alias table and merges them
+client-side, which is the only place the join can happen (the `city` param is
+exact and case-sensitive; `search` is escaped server-side so no alternation gets
+through).
+
+---
+
+## 4. Recommended order for core logic
+
+M4 through M9 and M11 through M13 are done (§2.5–§2.14), except the
+property-detail map (held for a dev-client rebuild, §5.1) and true
+server-initiated push (blocked on a backend change request, §2.14). **M10
+(agreements) was explicitly skipped this session** and is the one gap left in
+the M4–M13 range. What's left, in order:
+
+1. **M10 — agreements.** Depends on M8 (done). The largest remaining
+   buyer/owner-facing gap.
+2. **The map phase**, whenever a dev-client rebuild is scheduled: property
+   detail's locator (§2.5) plus M8's add/edit picker, both against
+   `docs/MAP_IMPLEMENTATION.md`.
+3. **The universal-links half of M12** (§2.13) — needs the Apple Team ID and
+   the Android signing cert's SHA-256 fingerprint, neither available from a
+   coding session; someone with access to both has to produce
+   `apple-app-site-association` and `assetlinks.json` and this app's
+   `associatedDomains`/`intentFilters` config together.
+4. **M14** — store readiness, once everything above is settled.
+
+---
+
+## 5. Decisions a new session must not accidentally undo
+
+### 5.1 No new native modules without a very good reason
+
+I added `expo-linear-gradient`, then removed it and rebuilt gradients on RN's
+built-in `experimental_backgroundImage` (`src/ui/Gradient.tsx`). Reason: a native
+module invalidates every installed dev client, and `expo start --tunnel` ships
+**JavaScript only**, so it silently serves a bundle the installed binary cannot
+run. Chirag's device workflow depends on this. Native additions must be
+deliberate and announced.
+
+**M8 added two more, deliberately: `expo-image-picker` and
+`expo-image-manipulator`.** There was no way to build listing photo upload
+without a native picker, and no way to keep uploads under the backend's 10 MB
+per-file cap without client-side compression. Both are registered in
+`app.config.js`'s `plugins` array.
+
+**M12 added `@react-native-community/netinfo`** for the offline banner
+(§2.13) — connectivity state needs a listener-based API, which `expo-network`
+does not provide.
+
+**M13 added `expo-notifications`**, for the local-notification permission and
+presentation calls (§2.14). No push-credential config needed on the client
+side for what this milestone actually built (local only), but the module
+itself is still native.
+
+**This means the installed dev client is now stale for FOUR independent
+reasons**: the M4 map's `react-native-webview`/`expo-location`, M8's
+`expo-image-picker`/`expo-image-manipulator`, M12's
+`@react-native-community/netinfo`, and M13's `expo-notifications`. One
+rebuild covers all four — do them together, not one at a time.
+
+### 5.2 The 20-req/min search limiter is a real design constraint
+
+`/properties/search`, `/suggestions` and `/filter` are capped at **20 requests
+per minute per IP**, and on Indian mobile networks that IP is a carrier NAT
+gateway shared with strangers. This is why:
+
+- Home sections below the fold are wrapped in `Reveal` (`src/lib/scrollReveal.tsx`),
+  which withholds the **mount**, and therefore the query, until the section
+  approaches the viewport.
+- Collections cache for 10 minutes, city counts for 15.
+- City counts come from **one** request counted locally, not 12 requests.
+
+Do not add an eager query to Home.
+
+### 5.3 One browsing implementation
+
+Home owns no feed, no filters, no sort, no pagination. Every affordance does
+`router.push({ pathname: '/search', params })`. A rent feed, a sale feed and a
+search-results screen are the same screen three times and they drift.
+
+### 5.4 Nothing claims what the data cannot support
+
+No fabricated stats. The ported production home screen carried "₹50 Cr+
+Brokerage Saved", "10k+ Happy Families" and city tiles reading "Mumbai 5000+"
+against a live corpus of **36 listings**, where Mumbai has 9. All of it is gone
+or computed. "Popular Listings" is real view counts; city tiles are real counts;
+"Featured" was renamed because no curation flag exists.
+
+Related: a section with no data **unmounts** rather than rendering an empty
+state. See `CollectionRail`.
+
+### 5.5 Live corpus is small — verify before assuming
+
+36 approved properties, 5 builder projects. 25 of 36 properties have real
+`address.latitude`/`longitude`. Probe endpoints before building against assumed
+volume; several "obvious" features return zero rows.
+
+---
+
+## 6. Verification commands
+
+```bash
+cd dealdirect-mobile
+npx tsc --noEmit          # currently clean
+npx expo lint             # currently 0 errors, 11 pre-existing warnings
+npx expo export --platform android   # currently succeeds
+```
+
+Device: `adb reverse tcp:8081 tcp:8081` then
+`npx expo start --dev-client --localhost`. `--tunnel` is currently broken
+because `@expo/ngrok@4.1.3` bundles an ngrok v2-era agent that ngrok has
+retired server-side; there is no newer version.
+
+---
+
+## 7. UI work deliberately deferred
+
+Chirag's call, 2026-08-05: core logic first, UI later. Outstanding UI items,
+none of them blocking:
+
+- Hero artwork is unresolved. Four images tried; current one is the website's
+  `herokaback.png` (Dubai, 2752×1085 panorama, ~40% visible after crop).
+- The **photo-band hero** was proposed and not built: photo in a ~260pt band
+  fading into solid dark, with the search and buttons on the solid part. Removes
+  the scrim entirely, shows ~78% of any image, and means the scrim never needs
+  retuning per image. This is the right fix and it is still open.
+- Collections rails are built but not rendered (§2.8).
+- `assets/home/brand/hero.png` (558 KB) is unused; delete or use.
+
+---
+
+## 8. M15–M22 — feature-parity scope (2026-08-08, M15–M17 done same day)
+
+A direct file-by-file audit of `client-next/` against `dealdirect-mobile/`
+turned up features the website ships that mobile doesn't. Chirag reviewed the
+full list and selected what to build next. **M15, M16 and M17 were
+implemented in the same session that wrote this scope** — see the "Done"
+notes under each below for what actually shipped and where it diverged from
+the scope as first written. M18–M22 remain scope only, no code yet. Two items
+were surfaced and explicitly declined; they're listed at the end so a future
+session doesn't "rediscover" and re-propose them.
+
+> ### COMPULSORY — the backend is live in production. Do not touch it.
+>
+> `backend/` is running in production today, serving the website and the
+> admin panel as well as this app. Every feature in M15–M22 below is
+> **frontend-only, mobile-side work** — proven by the fact that the website
+> already renders all of it against this exact same backend, unchanged. If
+> M15–M22 ever seems to need a new route, a new field, a schema change, or
+> any edit under `backend/`, that is a signal the scope was misread, not a
+> green light to add one. Stop and re-check against the website's own
+> implementation before writing a single line of backend code.
+>
+> This extends `MOBILE_APP_ARCHITECTURE_PLAN.md` §7 ("Things that MUST NEVER
+> be changed", rules 1–15) to the whole of M15–M22, with no exceptions listed
+> here — unlike M13's push-notification change request, nothing in this
+> range has been pre-approved for a backend change. Specifically, for the
+> items below:
+>
+> - **Close Deal + Claim Reward, brochure/RERA links, video/nearby fields,
+>   reward tiers** — all already returned by the live API today (the website
+>   reads `wallet.tier`, `project.media.brochureUrl`, `property.videoUrl`,
+>   `property.nearby`, and calls the close-deal endpoint against this same
+>   backend right now). Mobile is missing the client code, not the data.
+> - **Advanced search filters** — the underlying city/category/type data
+>   quality problem (§3.4, §3.5) is a known, pre-existing backend condition.
+>   Build the filters to tolerate it the way the website does. Do not "fix"
+>   the taxonomy or city normalisation in `backend/` to make the filters
+>   behave better — that is a backend change, and it is out of scope here
+>   regardless of how small it looks.
+> - **Content pages (M20)** — confirm each page's copy/data source (static
+>   copy, or an existing `GET /api/blogs`-style endpoint already used by the
+>   website) before assuming a new backend endpoint is needed. It isn't; the
+>   website is already fetching this content from something that exists.
+>
+> If a future session genuinely believes a backend change is required for
+> anything in M15–M22, that is a decision for Chirag to make explicitly, the
+> same way M13's push-notification change request was raised and approved on
+> its own merits before any code was written — not something to decide and
+> proceed on mid-implementation.
+
+| Milestone | Scope | State |
+|---|---|---|
+| M15 | Advanced search filters + profile depth | **done** |
+| M16 | Property detail completion (map, video, nearby, EMI, compare, related) | **done except the locator map** — still blocked, §5.1 |
+| M17 | Owner transaction completion (close deal, photo categorisation, location picker) | **done except the location picker** — still blocked, §5.1 |
+| M18 | Rewards depth (tiers, terms page) | not started |
+| M19 | Project extras (brochure, RERA download) | not started |
+| M20 | Content & marketing pages (blog, about, why-us, faq, contact, press, privacy, terms) | not started |
+| M21 | Platform polish (collections rails, Sentry) | not started |
+| M22 | Store readiness | not started (this **is** the original plan's M14, reactivated) |
+
+**Verification for M15–M17:** `npx tsc --noEmit` and `npx expo lint` both
+clean — 0 errors, the same 11 pre-existing warnings §6 already documents,
+nothing new added. **Untested on a device or in Expo Go/dev-client**, same
+caveat every prior milestone in this document carries: this pass verified
+with the type checker and linter only.
+
+**Order followed:** M15 and M16 depended only on existing data layers and
+were pure mobile-side work, so they went first, as planned. M17's close-deal
+piece shipped the same way; its photo-categorisation piece turned out to
+share nothing with the map's native-module dependency (§5.1) and shipped
+too — only the location picker itself stayed blocked, alongside M16's
+locator map, both on the same pending dev-client rebuild. **Remaining order,
+unchanged from the original plan:** M18/M19 are additive, no shared
+dependency, can run in any order or in parallel. M20 is entirely new route
+scaffolding, zero overlap with anything else — safe to parallelise. M21's
+Sentry item needs a DSN from Chirag before it can start; the collections-rails
+item is a few minutes of work (already built, just needs mounting, §2.8).
+**M22 last**, once everything above is settled — matches the original plan's
+own ordering logic (§4).
+
+### M15 — Advanced search filters + profile depth (done)
+
+**Done 2026-08-08.** Both pieces shipped; the search filters piece resolved
+the "which trade-off" question this section originally left open, rather than
+picking one blindly:
+
+- **Search filters — resolved by filtering client-side over an already-fetched
+  page, not by fixing the backend or accepting broken results.**
+  `usePopularListings`'s existing pattern (fetch one bounded page from
+  `/properties/search`, `limit=100`, then work over rows already in hand) is
+  reused wholesale: `usePropertySearchFeed` (`features/search/hooks.ts`)
+  switches into that mode only when a city/category/furnishing/construction
+  filter is active, and delegates to the untouched, unchanged
+  `usePropertyFeed` infinite-scroll path otherwise. Category and city filters
+  are genuinely safe now — `categoryName` and `matchCity`'s alias table (the
+  same one `features/home/cities.ts` already built) are both correct data,
+  the earlier write-up's concern was only ever about the corrupt `category`/
+  `propertyType` **ObjectId refs**, which this never touches. Furnishing
+  turned out to be a real, closed-enum field (`Property.furnishing`) the
+  website's OWN filter doesn't even read correctly (it checks a
+  `furnishingStatus` field that doesn't exist in the schema at all) — mobile's
+  version is the first one that actually works. Construction status is
+  genuinely free text with no enum, so it's a best-effort keyword match
+  (`ready` / `construction`), documented as such in `filters.ts` rather than
+  presented as exact. "Posted by" (owners vs. partner agents) was dropped —
+  no backing field exists on the schema for it; it appears to be decorative
+  UI on the website with nothing behind it. Full reasoning:
+  `src/features/search/filters.ts`'s updated header comment.
+- **Rich profile fields — shipped exactly as scoped.** All five fields plus
+  the SMS toggle are now in `UpdateProfileValues`, the settings form
+  (`app/settings/index.tsx`), and the multipart payload, matching the field
+  names `userController.js:922` already reads
+  (`alternatePhone`, `address` as a JSON object, `dateOfBirth`, `gender`,
+  `preferences.smsNotifications`). Date of birth is a `YYYY-MM-DD` text field
+  rather than a native date picker — no date-picker module is installed, and
+  adding one is its own native-module decision (§5.1), not a default this
+  form should force.
+
+*Original scope write-up below, kept for the reasoning it recorded before
+implementation started — the "Done" note above is what actually shipped.*
+
+- **Search filters.** Website (`client-next/src/app/properties/PropertyListContent.jsx`
+  filter bar, `client-next/src/components/HeroSection/*Filter.jsx`,
+  `filterConfig.js`) exposes city, property type (category-scoped
+  residential/commercial sub-types), 33-tier budget bands, possession status
+  (ready-to-move / under-construction), furnishing (furnished / semi /
+  unfurnished / gated community), and posted-by (owners / partner agents).
+  Mobile's `src/features/search/filters.ts` + `FilterSheet.tsx` deliberately
+  ship only free text, rent/sale, a 5-tier price band, and sort — the file's
+  own header comment explains why (city/type/category data is unreliable
+  against live production data, §3.4/§3.5 of this document). Building this
+  means either accepting that unreliability the same way the website does, or
+  fixing the underlying taxonomy/city-normalisation issues first. Decide
+  which before starting — do not silently re-introduce the bug the current
+  code was written to avoid.
+- **Rich profile fields.** Website (`client-next/src/app/profile/ProfileContent.jsx`,
+  Profile Info tab) collects alternate phone, date of birth, gender, and a
+  5-field address block (line1, line2, city, state, pincode), plus separate
+  email and SMS notification toggles. Mobile's `useUpdateProfile`
+  (`src/features/profile/hooks.ts`) and its form on `app/settings/index.tsx`
+  send only `name`, `phone`, `bio`, `emailNotifications`, and photo — the
+  other fields aren't in the payload builder at all, not even as unused UI.
+  Add the fields to `UpdateProfileValues`, the form, and the multipart
+  payload; confirm the backend's `updateProfile`
+  (`userController.js:922`) actually persists all of them before trusting the
+  UI.
+
+### M16 — Property detail completion (done except the locator map)
+
+**Done 2026-08-08**, except the locator map, which stays blocked exactly as
+scoped — nothing changed there:
+
+- **Video walkthrough + Nearby chips** shipped as pure render-layer additions,
+  as scoped — `VideoWalkthrough.tsx` and `NearbyPlaces.tsx`
+  (`features/properties/components/`), wired into
+  `app/property/[id]/index.tsx`. Video opens externally via `Linking.openURL`
+  rather than an embedded YouTube iframe — embedding needs a WebView, which is
+  the exact native module the locator map is blocked on (§5.1); adding it for
+  this smaller feature would trigger the same dev-client rebuild for a much
+  smaller payoff. `PropertyDetail.nearby` and `PropertySummary.furnishing`/
+  `.constructionStatus` were added to `features/properties/types.ts` and
+  `adapters.ts` to carry the fields these needed — the same two fields M15's
+  filters also ended up needing, so they only had to be added once.
+- **EMI calculator** shipped as scoped, arithmetic ported 1:1 from the
+  website's `useEffect` in `PropertyDetailsContent.jsx` (`EmiCalculator.tsx`).
+- **Compare properties** shipped, but comparing `PropertySummary` fields
+  (already in memory from the search results being browsed), never
+  `PropertyDetail` — seeing `GET /properties/:id` increments the listing's
+  view counter on every call, fetching 2–3 listings' full detail just to
+  populate a comparison table would have silently inflated their view counts
+  for an action that isn't a real view. The row set is correspondingly
+  smaller than the website's (no amenities/parking/facing — those live only
+  on `PropertyDetail.raw`). `features/search/compare.ts` has the full
+  reasoning. UI: `CompareBar.tsx` (sticky selection bar) and
+  `CompareSheet.tsx` (side-by-side table), both in
+  `features/search/components/`; `PropertyCard` gained an optional `compare`
+  prop so every other screen that renders one is unaffected.
+- **Related properties** shipped, scored against a bounded 100-listing pool
+  (`RELATED_POOL_SIZE` in `features/search/related.ts`) rather than the
+  website's unbounded `/property-list` fetch — same reasoning as M15's filter
+  pool. Shown as a footer rail (`PropertyList` gained an optional `footer`
+  prop) below search results once the direct match count drops under 6.
+
+*Original scope write-up below, kept for the reasoning it recorded before
+implementation started.*
+
+- **Locator map.** `app/property/[id]/map.tsx` is currently an 11-line
+  `Placeholder` stub. Needs the dev-client rebuild (§5.1) for
+  `react-native-webview` + `expo-location`. Full spec already exists at
+  `docs/MAP_IMPLEMENTATION.md`.
+- **Video walkthrough embed.** `videoUrl` is already typed and adapted
+  (`src/features/properties/types.ts:149`, `adapters.ts:335`) but never
+  rendered anywhere. Website renders it via `getVideoEmbedUrl` as a YouTube
+  iframe / external-link fallback (`PropertyDetailsContent.jsx`). Pure
+  render-layer work — no new data plumbing needed.
+- **Nearby places chips.** Same situation: `nearby`/`nearbyPlaces`
+  (`src/types/backend/property.ts:57`) is typed, never rendered. Website
+  shows it as chips near the amenities section. Also pure render-layer work.
+- **EMI / loan calculator.** New UI + arithmetic, no backend dependency.
+  Website version (`PropertyDetailsContent.jsx`, state ~L567–753, UI
+  ~L1398–1409): editable loan amount (defaults to 80% of listing price),
+  interest rate, tenure → live monthly EMI. No shared dependency with the
+  map — build it independently of the M17 native-module rebuild.
+- **Compare properties.** Largest of this group. Website
+  (`PropertyListContent.jsx` L310–539, L2221–2521): pick up to 3 same-type
+  listings, sticky compare bar, side-by-side spec modal. Needs new
+  cross-screen state (selection persists while browsing search results) —
+  design that before writing UI.
+- **Related/similar properties.** Website backfills a scored "related
+  properties" grid when a filtered search returns under 6 results
+  (`PropertyListContent.jsx` L901–1021, L2039–2076). Port the same scoring
+  logic; verify it still makes sense against the live 36-listing corpus
+  (§5.5) before assuming it'll ever have enough data to show anything.
+
+### M17 — Owner transaction completion (done except the location picker)
+
+**Done 2026-08-08**, except the location picker, which stays blocked exactly
+as scoped — same native-module dependency as M16's locator map, nothing
+changed there:
+
+- **Close Deal + Claim Reward** shipped end to end, including a gap the
+  original scope note didn't catch: `claimDealReward` has no "my
+  verifications" list to be reached from, and the `deal_reward` notification
+  that announces an approved deal carries a `verificationId`, not a
+  `propertyId` — `resolveNotificationTarget`
+  (`features/notifications/targets.ts`) had no case for that type, so the
+  notification was previously unnavigable, dead in the list. Added a
+  `dealReward` target and a new route,
+  `app/claim-reward/[verificationId].tsx`, which claims automatically on open
+  (the notification tap was already the confirmation step) and handles
+  `alreadyClaimed: true` as the normal repeat-tap outcome it is, not an error.
+  Close-deal itself is `CloseDealSheet.tsx`
+  (`features/listings/components/`), opened from a new "Close deal" button on
+  `app/owner/properties.tsx`, gated on the exact same status set the backend
+  itself rejects (`pending_verification`/`sold`/`rented`) so the button never
+  offers an action the server would 400. Proof documents are photos via
+  `expo-image-picker` (already installed since M8), not arbitrary PDF upload —
+  adding `expo-document-picker` for this one screen would be a fourth native
+  module stacked on the pending rebuild for a feature photographing the same
+  paperwork already serves. `CloseDealResponse`/`ClaimDealRewardResponse` were
+  added to `types/backend/property.ts`, replacing the placeholder `OkEnvelope`
+  typing on both endpoints — the real payloads carry `verification`/`reward`
+  objects the UI actually needs.
+- **Per-room categorised photo upload** shipped, and turned out to need
+  matching two DIFFERENT wire formats, not one — `addProperty` and
+  `updateMyProperty` disagree on both the file field name for new categorised
+  photos (`categorizedImages` vs `images`) AND the shape of
+  `imageCategoryMap` (an object keyed by category vs. a position-matched
+  array) — see the expanded module doc in `features/listings/formData.ts`
+  for the exact mechanics, confirmed by reading both controller functions
+  directly rather than assuming they matched. `existingCategorizedPhotos`
+  (`editAdapter.ts`, replacing the old flatten-everything-to-`other`
+  `existingPhotoUrls`) now preserves each existing photo's real category
+  through an edit, rather than silently re-bucketing the whole gallery into
+  `other` the way the pre-M17 code did. `ListingForm.tsx` gained a
+  per-tile "which room is this?" sheet, category options scoped to
+  Residential/Commercial via `photoCategoriesFor` (`features/listings/types.ts`).
+- **Location picker**: unchanged, still blocked. `react-native-webview` and
+  `expo-location` are still not in `package.json` — checked again at the
+  start of this work, not assumed from the earlier note.
+
+*Original scope write-up below, kept for the reasoning it recorded before
+implementation started.*
+
+- **Close Deal + Claim Reward.** The single biggest functional hole in owner
+  mode. `POST` endpoint is already typed in
+  `src/api/endpoints/properties.ts` but nothing calls it. Website's
+  `components/Properties/CloseDealModal.jsx` is the reference: owner picks
+  closing type (sold/rented, defaulted from listing type), uploads closing
+  documents, selects the buyer from `interestedUsers`, submits. This is what
+  triggers the reward payout — until this exists, an owner on mobile has no
+  way to ever claim a reward.
+- **Add/edit property location picker.** Not built at all today (distinct
+  from the detail-page locator map above). Shares the same native-module
+  dependency (§5.1).
+- **Per-room categorised photo upload.** Website buckets photos into
+  `categorizedImages.residential.kitchen` / `.bedroom` / etc. Mobile
+  (`src/features/listings/formData.ts`) only offers one flat `other` bucket
+  today — deliberately descoped in M8, not a technical blocker. Re-read
+  `buildEditFormData`'s reasoning (§2.10) before touching this: the edit-flow
+  image landmine (omitting `existingCategorizedImages` wipes the gallery) is
+  still real and must stay handled once per-room UI is added.
+
+### M18 — Rewards depth
+
+- **Reward tiers.** Website (`client-next/src/app/rewards/dashboard/RewardsDashboardContent.jsx`,
+  `TIER_CONFIG`) has Bronze/Silver/Gold/Diamond. Mobile's
+  `app/rewards/index.tsx` shows balance + referral link + store/redeem only
+  (already built, §2.9) — no tier system.
+- **Rewards Terms page.** Website has a dedicated 127-line subpage
+  (`client-next/src/app/rewards/terms/RewardsTermsContent.jsx`). New mobile
+  route, static content, no data layer needed.
+
+### M19 — Project extras
+
+- **Brochure + RERA certificate download.** Website
+  (`client-next/src/app/projects/[id]/ProjectDetailContent.jsx` L319–324,
+  `.../units/[unitTypeId]/UnitDetailContent.jsx` L362–368) links
+  `project.media.brochureUrl` and a RERA cert URL. Mobile's project/unit type
+  layer doesn't carry these fields yet — add to `types.ts`/`adapters.ts` in
+  `src/features/projects/` before the screens can render them.
+
+### M20 — Content & marketing pages
+
+None of these exist in mobile as routes today — no stubs, nothing. All are
+static-to-mostly-static content, low risk, no shared state with the rest of
+the app. Website sources:
+
+| Page | Website route |
+|---|---|
+| Blog list + post | `client-next/src/app/blog/`, `blog/[slug]/` |
+| About | `client-next/src/app/about/` |
+| Why DealDirect | `client-next/src/app/why-us/` |
+| FAQ | `client-next/src/app/faq/` |
+| Contact / Support | `client-next/src/app/contact/` |
+| Press & Impressions | `client-next/src/app/press-impressions/` |
+| Privacy Policy | `client-next/src/app/privacy/` |
+| Terms of Service | `client-next/src/app/terms/` |
+
+Matches screens #43–44 in the original architecture plan's screen order
+(§4 of that document), which anticipated blog/contact but not the other six —
+those are new scope from the 2026-08-08 audit.
+
+### M21 — Platform polish
+
+- **Enable collections rails.** Already built and tested
+  (`src/features/home/collections.ts`, `CollectionRail.tsx`) — 15 curated
+  rails (Luxury, Sea View, Starter Homes, …), each gated on live result count.
+  Not currently mounted on Home. One `COLLECTIONS.map()` call away (§2.8).
+  Do this first in this milestone — it's minutes of work, not days.
+- **Sentry.** Website has it wired; mobile has no DSN configured anywhere.
+  Blocked on Chirag supplying a DSN — flag this rather than guessing one.
+
+### M22 — Store readiness
+
+This is the original plan's **M14**, reactivated rather than redefined. See
+`MOBILE_APP_ARCHITECTURE_PLAN.md` §M14 and §1.27–1.28 for the App Store /
+Play Store requirements already documented there. Sequence last, once M15–M21
+are settled — a store listing for a half-finished feature set is wasted
+effort.
+
+### Explicitly declined — do not re-propose
+
+Two items came up in the audit and Chirag turned them down. Don't rebuild
+them without asking again:
+
+- **WhatsApp contact/share buttons** — website has them on project/unit
+  detail, my-properties, and blog (`wa.me` links). Declined for mobile.
+- **Newsletter signup** — website's footer version is itself a non-functional
+  stub (`Footer.jsx`, `handleSubscribe` just simulates success via
+  `setTimeout`, no real API call). Not worth porting a fake feature.
+
+**Agreements (M10 of the original plan) remains skipped**, unchanged from
+§1's status table — the audit surfaced it again as the single largest
+remaining gap, and Chirag declined to schedule it in this pass. It stays the
+biggest open item in the whole roadmap; revisit as its own decision, not
+folded into M15–M22.

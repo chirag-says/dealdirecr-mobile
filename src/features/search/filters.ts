@@ -1,0 +1,310 @@
+/**
+ * Search filter state, and its projection onto the backend's query params.
+ *
+ * Every field here maps to a param `searchProperties` reads AND that live data
+ * actually responds to. Both halves were checked; the second half is where most
+ * of this file's reasoning went, because several params the controller accepts
+ * do nothing useful against the production database.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT `/properties/search` ACCEPTS
+ * (backend/controllers/propertyController.js:1811, read 2026-08-03; every claim
+ * below was then probed against https://backend.dealdirect.in on the same day,
+ * against a corpus of 36 approved listings.)
+ *
+ *   search        regex over title, description, address.city, address.area,
+ *                 address.locality. Case-insensitive, escaped server-side.
+ *                 VERIFIED: "Apartment" → 16, "Showroom" → 2, "Bengaluru" → 6.
+ *                 SHIPPED.
+ *
+ *   priceFrom     price >= n, on the raw `price` column, in rupees.
+ *   priceTo       price <= n.
+ *                 VERIFIED: priceTo=100000 → 21, priceFrom=5000000 → 8, against
+ *                 a baseline of 36. Consistent with `price` holding rupees.
+ *                 SHIPPED, as bands — see PRICE below.
+ *
+ *   sort          newest | priceAsc | priceDesc. SHIPPED.
+ *   page, limit   offset paging, limit defaults to 12. SHIPPED.
+ *
+ *   category      exact ObjectId match. NOT SHIPPED — see TAXONOMY below.
+ *   subcategory   exact ObjectId match. NOT SHIPPED — same reason.
+ *   propertyType  exact ObjectId match. NOT SHIPPED — same reason.
+ *   city          exact, CASE-SENSITIVE match on `address.city`.
+ *                 NOT SHIPPED — see CITY below.
+ *   buildingType  NOT SHIPPED — the field does not exist on the schema.
+ *   size          NOT SHIPPED — the field does not exist on the schema.
+ *
+ * ---------------------------------------------------------------------------
+ * TAXONOMY, CITY, FURNISHING, CONSTRUCTION STATUS — updated 2026-08-08.
+ *
+ * The reasoning above (category/property-type params being unusable, city
+ * being exact-and-case-sensitive) is still true of the SERVER-SIDE `category`,
+ * `subcategory`, `propertyType` and `city` query params. None of that changed.
+ *
+ * What changed is where the filtering happens. `usePopularListings`
+ * (`features/home/usePopularListings.ts`) already established the accepted
+ * pattern for this exact situation: fetch one bounded page from the paginated
+ * `/properties/search` endpoint (`limit=100`, never the unbounded
+ * `/property-list` or `/filter` — see `MOBILE_APP_ARCHITECTURE_PLAN.md` §7
+ * rule 18) and do the real filtering client-side over rows already in hand.
+ * The live corpus is 36 listings (§5.5 of `docs/HANDOFF.md`), so one page of
+ * 100 covers all of it today, same ceiling `usePopularListings` documents.
+ *
+ * That pattern resolves the taxonomy problem outright: `categoryName` is the
+ * denormalised STRING field, confirmed correct on every row in the original
+ * audit. The corruption was only ever in the `category`/`propertyType`
+ * ObjectId REFS, which a client-side string match never touches. So a
+ * Residential/Commercial filter is safe to offer now — see `CATEGORY_OPTIONS`
+ * and `matchesCategory` below.
+ *
+ * City gets the same treatment, reusing the alias table `features/home/
+ * cities.ts` already built for the "Explore by City" tile counts, for the
+ * identical reason: `address.city` still has "Bangalore"/"Bengaluru",
+ * "Kolkata"/"kolkata" duplicates in production, and a raw equality match would
+ * still under-return. `matchCity` merges those before comparing, so the filter
+ * behaves the way a user expects a "Bangalore" filter to behave. See
+ * `CITY_OPTIONS` and `matchesCity`.
+ *
+ * `furnishing` turned out to be a real schema field (`Property.furnishing`,
+ * `String`) with a real fixed set of values — the add/edit listing form
+ * (`features/listings/components/ListingForm.tsx:417`) writes exactly
+ * `Unfurnished` / `Semi-furnished` / `Fully furnished` and nothing else. Not
+ * the field the website's own broken filter reads (it checks the nonexistent
+ * `furnishingStatus`), but the real one. Exact match is safe here because the
+ * value set is closed by the form that writes it.
+ *
+ * `constructionStatus` is real but free text (no enum), typed by an owner
+ * against a placeholder suggestion ("Ready to move / Under construction") in
+ * the same form. An exact match against free text would fail the same way the
+ * website's own broken filters do, so this one is a best-effort keyword match
+ * (`matchesConstructionStatus`), not an equality check — documented as such so
+ * nobody mistakes it for a closed enum later.
+ *
+ * None of this required a `/properties/search` param that does not exist, and
+ * none of it calls an unbounded endpoint. It is the same rule the earlier
+ * version of this comment established, applied with one more year of
+ * hindsight: filter on data proven correct, over rows already fetched.
+ *
+ * ---------------------------------------------------------------------------
+ * PRICE: bands, not a slider.
+ *
+ * `price` holds rupees, and `priceUnit` does NOT scale it — it carries the
+ * schema default "Lac" on most rows regardless of the value beside it. The full
+ * evidence is in `src/ui/PriceLabel.tsx`; the filter and the label agree on
+ * this, which is the point.
+ *
+ * Bands rather than a range slider because one linear axis has to cover both
+ * ₹8,000 rentals and ₹5 crore sales — a slider makes the entire rental range
+ * about one pixel wide. The backend has no `listingType` param to split the two
+ * populations, so the axis cannot be scoped. `RangeSlider` stays unused until
+ * it can be.
+ *
+ * Bands are inclusive at both ends server-side (`$gte` / `$lte`), so a listing
+ * priced exactly on a boundary appears in both adjacent bands. Only one band is
+ * selectable at a time, so no user sees the duplicate.
+ */
+
+import { CITIES, matchCity, type City } from '@/features/home';
+import type { ListingIntent, PropertySummary } from '@/features/properties';
+import type { PropertySearchParams, PropertySortOrder } from '@/types/backend/property';
+
+const LAKH = 100_000;
+const CRORE = 10_000_000;
+
+export interface PriceBand {
+  id: string;
+  label: string;
+  from?: number;
+  to?: number;
+}
+
+/**
+ * Bands in rupees. A table rather than a chain of conditionals, so adding one
+ * is a data change and the labels cannot drift from the bounds they describe.
+ */
+export const PRICE_BANDS: readonly PriceBand[] = [
+  { id: 'under-1l', label: 'Under ₹1 Lakh', to: LAKH },
+  { id: '1l-25l', label: '₹1 – 25 Lakh', from: LAKH, to: 25 * LAKH },
+  { id: '25l-1cr', label: '₹25 Lakh – ₹1 Crore', from: 25 * LAKH, to: CRORE },
+  { id: '1cr-5cr', label: '₹1 – 5 Crore', from: CRORE, to: 5 * CRORE },
+  { id: 'above-5cr', label: 'Above ₹5 Crore', from: 5 * CRORE },
+];
+
+export interface SearchFilters {
+  /** Free text. Note the param is `search`, NOT `q`. */
+  query: string;
+  /**
+   * Rent versus sale. Undefined means both.
+   *
+   * Kept OUT of the filter sheet on purpose. It is the primary axis of a
+   * property search, and it is what the Home hero cards preselect, so a user
+   * arriving from "For Rent" must be able to see and change it without opening
+   * a sheet to find out why the results look the way they do. It lives as a
+   * permanently visible control on the results screen instead, and is excluded
+   * from `countActiveFilters` for the same reason.
+   */
+  listingType?: ListingIntent;
+  /** `PriceBand.id`, or undefined for any price. */
+  priceBand?: string;
+  sort: PropertySortOrder;
+
+  /**
+   * The four fields below are CLIENT-ONLY. They are never sent as
+   * `/properties/search` query params — see the TAXONOMY/CITY/FURNISHING/
+   * CONSTRUCTION STATUS block above for why. `toSearchParams` deliberately
+   * ignores them; `hasClientOnlyFilters` is what tells the search hook to
+   * switch into the bounded-fetch-and-filter mode instead.
+   */
+  /** `City.id` from `features/home/cities.ts`, or undefined for any city. */
+  city?: string;
+  /** Exact `categoryName` match: `'Residential' | 'Commercial'`. */
+  categoryName?: string;
+  /** Exact `furnishing` match, one of `FURNISHING_OPTIONS`. */
+  furnishing?: string;
+  /** Best-effort keyword match against free-text `constructionStatus`. */
+  constructionStatus?: string;
+}
+
+export const DEFAULT_FILTERS: SearchFilters = {
+  query: '',
+  sort: 'newest',
+};
+
+export const SORT_OPTIONS: readonly { label: string; value: PropertySortOrder }[] = [
+  { label: 'Newest first', value: 'newest' },
+  { label: 'Price: low to high', value: 'priceAsc' },
+  { label: 'Price: high to low', value: 'priceDesc' },
+];
+
+export function findPriceBand(id: string | undefined): PriceBand | undefined {
+  if (!id) return undefined;
+  return PRICE_BANDS.find((band) => band.id === id);
+}
+
+/**
+ * Filters → query params.
+ *
+ * Empty values are omitted rather than sent blank, both because the controller
+ * treats any truthy value as a filter and because an empty string would split
+ * the query cache into two entries for the same search.
+ */
+export function toSearchParams(filters: SearchFilters): PropertySearchParams {
+  const params: PropertySearchParams = { sort: filters.sort };
+
+  const query = filters.query.trim();
+  if (query) params.search = query;
+  if (filters.listingType) params.listingType = filters.listingType;
+
+  const band = findPriceBand(filters.priceBand);
+  if (band?.from !== undefined) params.priceFrom = band.from;
+  if (band?.to !== undefined) params.priceTo = band.to;
+
+  return params;
+}
+
+/**
+ * How many filters are applied, for the badge on the filter button.
+ *
+ * The free-text query is excluded: it is visible in the search field already,
+ * and counting it would make the badge read "1" on a plain search with no
+ * filters at all. Sort is excluded because it always has a value.
+ */
+export function countActiveFilters(filters: SearchFilters): number {
+  let count = filters.priceBand ? 1 : 0;
+  if (filters.city) count += 1;
+  if (filters.categoryName) count += 1;
+  if (filters.furnishing) count += 1;
+  if (filters.constructionStatus) count += 1;
+  return count;
+}
+
+// --- Client-only filters: city, category, furnishing, construction status -
+
+export const CATEGORY_OPTIONS: readonly { label: string; value: string }[] = [
+  { label: 'Residential', value: 'Residential' },
+  { label: 'Commercial', value: 'Commercial' },
+];
+
+export const FURNISHING_OPTIONS: readonly { label: string; value: string }[] = [
+  { label: 'Unfurnished', value: 'Unfurnished' },
+  { label: 'Semi-furnished', value: 'Semi-furnished' },
+  { label: 'Fully furnished', value: 'Fully furnished' },
+];
+
+/**
+ * Two buckets over free text, not an enum. `matchesConstructionStatus` below
+ * decides membership by keyword, since the field itself has no fixed values.
+ */
+export const CONSTRUCTION_STATUS_OPTIONS: readonly { label: string; value: string }[] = [
+  { label: 'Ready to move', value: 'ready' },
+  { label: 'Under construction', value: 'construction' },
+];
+
+/** `City.id` + label, for the filter sheet's city chips. */
+export const CITY_OPTIONS: readonly { label: string; value: string }[] = CITIES.map(
+  (city: City) => ({ label: city.label, value: city.id })
+);
+
+/** True when any filter that requires the bounded fetch-and-filter mode is set. */
+export function hasClientOnlyFilters(filters: SearchFilters): boolean {
+  return Boolean(
+    filters.city || filters.categoryName || filters.furnishing || filters.constructionStatus
+  );
+}
+
+function matchesCity(item: PropertySummary, cityId: string): boolean {
+  const matched = matchCity(item.city);
+  return matched?.id === cityId;
+}
+
+function matchesCategory(item: PropertySummary, categoryName: string): boolean {
+  return (item.categoryName ?? '').toLowerCase() === categoryName.toLowerCase();
+}
+
+function matchesFurnishing(item: PropertySummary, furnishing: string): boolean {
+  return (item.furnishing ?? '').toLowerCase() === furnishing.toLowerCase();
+}
+
+/**
+ * Keyword match, not equality — see the CONSTRUCTION STATUS note above. A
+ * listing whose owner wrote "Ready to move, water connection pending" still
+ * counts as "Ready to move"; one that never mentions either keyword matches
+ * neither bucket rather than being guessed into one.
+ */
+function matchesConstructionStatus(item: PropertySummary, bucket: string): boolean {
+  const raw = (item.constructionStatus ?? '').toLowerCase();
+  if (!raw) return false;
+  if (bucket === 'ready') return raw.includes('ready');
+  if (bucket === 'construction') return raw.includes('construction') || raw.includes('under');
+  return false;
+}
+
+/** Applies every client-only filter currently set. Server-side filters
+ *  (query, listingType, price, sort) are assumed already applied upstream —
+ *  this only covers the fields `toSearchParams` cannot send. */
+export function matchesClientFilters(item: PropertySummary, filters: SearchFilters): boolean {
+  if (filters.city && !matchesCity(item, filters.city)) return false;
+  if (filters.categoryName && !matchesCategory(item, filters.categoryName)) return false;
+  if (filters.furnishing && !matchesFurnishing(item, filters.furnishing)) return false;
+  if (
+    filters.constructionStatus &&
+    !matchesConstructionStatus(item, filters.constructionStatus)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function hasAnyCriteria(filters: SearchFilters): boolean {
+  return (
+    filters.query.trim().length > 0 ||
+    Boolean(filters.listingType) ||
+    countActiveFilters(filters) > 0
+  );
+}
+
+export const LISTING_TYPE_OPTIONS: readonly { label: string; value: ListingIntent | undefined }[] = [
+  { label: 'All', value: undefined },
+  { label: 'For rent', value: 'rent' },
+  { label: 'For sale', value: 'sale' },
+];
