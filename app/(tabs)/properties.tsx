@@ -443,7 +443,13 @@ export default function PropertiesScreen() {
       />
 
       {/* States what an enquiry does before it is sent — see `EnquirySheet`. */}
-      <EnquirySheet save={save} />
+      <EnquirySheet
+        visible={save.pending !== null}
+        subtitle={save.pending?.locationLabel || save.pending?.title}
+        remaining={save.remaining}
+        onConfirm={save.confirm}
+        onCancel={save.cancel}
+      />
     </Screen>
   );
 }

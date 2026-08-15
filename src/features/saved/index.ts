@@ -11,4 +11,4 @@ export {
 
 export { useSaveToggle, type SaveToggle } from './saveToggle';
 export { EnquiryMeter } from './components/EnquiryMeter';
-export { EnquirySheet } from './components/EnquirySheet';
+export { EnquirySheet, type EnquirySheetProps } from './components/EnquirySheet';

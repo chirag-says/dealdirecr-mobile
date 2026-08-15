@@ -2409,3 +2409,93 @@ render — including on every keystroke in the search field — which changed
 Feel-check on device: the enquiry sheet at the largest accessibility text sizes
 on a 667pt screen (it does not scroll); the busy lock on a slow connection; and
 whether the 36pt filter pill needs its `hitSlop` widened on small phones.
+
+---
+
+## 13. 2026-08-15 — Property Detail and Gallery
+
+Scoped to two screens. Nothing else was touched.
+
+### 13.1 The call button is gone, and what that does and does not achieve
+
+Removed on instruction from `DetailActions`, along with `Linking`, the `tel:`
+handler and the `IconAction` helper. Nothing phone-shaped replaces it; the bar
+carries one action.
+
+**Recorded so nobody restores it thinking it was an oversight.** The button read
+`property.owner.phone`, which arrives from `GET /properties/:id` — a PUBLIC
+endpoint that populates the owner's phone and email into every response. So
+removing the button removes the encouragement, not the exposure: the number is
+still readable by anyone who calls the API directly. If it should not be
+reachable, the fix is what the endpoint returns, not what this bar draws. Not
+changed here — that is a backend decision.
+
+### 13.2 The enquiry now confirms before the side effect
+
+The detail screen's CTA called `interest.toggle()` directly, which posts to
+`/properties/interested/:id` and creates the lead, the notification and the
+WhatsApp message in one tap. It now raises `EnquirySheet` first and only calls
+`toggle` from the sheet's confirm. Withdrawing still goes straight through —
+cheap, frees the slot, nothing to warn about.
+
+`EnquirySheet` took plain props for this rather than being bound to
+`useSaveToggle`. Two hooks reach the same endpoint (`useSaveToggle` on the feed
+and Saved, `useInterest` on detail); binding the sheet to either would have
+meant a second copy for the other, which is how two confirmations end up
+wording the same consequence differently.
+
+The screen reads `useSavedProperties` for the true remaining count — the same
+query the feed's hearts already run, deduplicated, so no extra request. It
+feeds both the sheet's quota line and a disabled CTA with an explanation when
+the cap is reached, instead of a press that gets refused.
+
+### 13.3 Hero
+
+- **Height is `heroHeight(width)`, not a flat 320.** A fixed height is a fixed
+  CROP over a variable width, so the same listing showed more sky on a 430pt
+  phone than on a 375pt one. `HERO_HEIGHT` is gone; `DetailHeader` and the
+  skeleton call the function.
+- **Two indicators that say different things**, never both saying the same one:
+  dots bottom-centre for POSITION (up to 8, then dropped), and a button
+  bottom-right for COUNT and for opening the viewer. Past 8 the button takes
+  the position back as "3 / 24".
+- The old chip was drawn inside the content sheet's 20pt overlap and was
+  visibly clipped. Everything now sits at `20 + lg` from the photo's edge.
+- The counter chip went from `black/55` at caption size to `black/72` at
+  footnote/600 in a 32pt pill with a 44pt hit slop — it was reported as too
+  easy to miss.
+
+**A next-image peek was rejected.** It needs horizontal gutters, and gutters end
+the full-bleed treatment that makes the hero read as a photograph rather than a
+card. On a 375pt screen the peek would be about 16pt: not enough to be legible
+as an image, plenty to look accidentally misaligned.
+
+### 13.4 Gallery: black was not the problem, empty black was
+
+A 3:2 photograph on a 19.5:9 phone leaves roughly 40% of the screen empty, and
+the old layout put a 12pt "1 of 6" in it. Stretching distorts; cropping to fill
+throws away what the owner chose to include. The third answer is to use the
+space.
+
+A **thumbnail filmstrip** occupies the lower band and earns it three times: it
+shows the neighbouring images (§10's ask, without shrinking the current one by a
+point), it makes the set's size visible, and it is a direct jump rather than N
+swipes. The band is reserved out of the pager's height rather than overlaid, so
+the thumbnails can never land on the photograph on a short device.
+
+One pagination system: the selected thumbnail IS the position. "3 of 6" beside
+it is a count, not a second set of dots. The strip is dropped entirely at one
+image — no filmstrip of one, no "1 of 1".
+
+Close button: `white/15` → a 36pt `black/55` disc inside a 44pt target. The old
+fill was invisible against a pale photograph, which is exactly when a close
+button has to be findable.
+
+### 13.5 Unverified
+
+- The filmstrip's `scrollToIndex` on a fast swipe through 60 photos — FlatList
+  can throw `scrollToIndex out of range` if the strip has not rendered that far;
+  `getItemLayout` should prevent it but it has not been seen.
+- `pagerHeight` on a landscape rotation.
+- The enquiry sheet at the largest accessibility text sizes (still not
+  scrollable — carried over from §12.6).

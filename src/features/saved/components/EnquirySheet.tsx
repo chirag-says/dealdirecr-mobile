@@ -4,7 +4,6 @@ import { View } from 'react-native';
 import { spacing, useTheme } from '@/theme';
 import { Button, Sheet, Text } from '@/ui';
 import { INTEREST_LIMIT } from '../hooks';
-import type { SaveToggle } from '../saveToggle';
 
 /**
  * What happens when you enquire, said BEFORE it happens.
@@ -42,19 +41,47 @@ import type { SaveToggle } from '../saveToggle';
  *
  * The quota line is the part users cannot discover anywhere else at the moment
  * they need it. Five is small enough that the fourth one is a decision.
+ *
+ * ---------------------------------------------------------------------------
+ * PLAIN PROPS, TWO DRIVERS
+ *
+ * Two surfaces raise this: the feed and Saved, through `useSaveToggle`, and the
+ * property detail screen, through `useInterest`. Those are different hooks
+ * against the same endpoint, and binding the sheet to either would have meant a
+ * second copy for the other — which is how two confirmations end up wording the
+ * same consequence differently.
  */
-export function EnquirySheet({ save }: { save: SaveToggle }) {
+export interface EnquirySheetProps {
+  visible: boolean;
+  /** Which listing. The location reads better than the machine-made title. */
+  subtitle?: string;
+  /**
+   * Slots left BEFORE this enquiry, or null when unknown (signed out, or the
+   * saved list has not resolved). Null hides the quota line rather than
+   * guessing at it.
+   */
+  remaining: number | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+export function EnquirySheet({
+  visible,
+  subtitle,
+  remaining,
+  onConfirm,
+  onCancel,
+}: EnquirySheetProps) {
   const theme = useTheme();
-  const property = save.pending;
 
   // Counted as it will be AFTER this enquiry, because that is the number the
   // user is deciding about.
-  const remainingAfter = Math.max(0, save.remaining - 1);
+  const remainingAfter = remaining === null ? null : Math.max(0, remaining - 1);
 
   return (
     <Sheet
-      visible={property !== null}
-      onClose={save.cancel}
+      visible={visible}
+      onClose={onCancel}
       title="Send enquiry?"
       // The default 0.6. Sized against the tallest state — three two-line
       // consequences, the quota line and two buttons — on the shortest phone
@@ -63,9 +90,9 @@ export function EnquirySheet({ save }: { save: SaveToggle }) {
       // become a scroll; flagged rather than pre-built.
     >
       <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
-        {property ? (
+        {subtitle ? (
           <Text variant="callout" tone="secondary" numberOfLines={2}>
-            {property.locationLabel || property.title}
+            {subtitle}
           </Text>
         ) : null}
 
@@ -82,33 +109,30 @@ export function EnquirySheet({ save }: { save: SaveToggle }) {
           </Consequence>
         </View>
 
-        <View
-          className="flex-row items-center"
-          style={{
-            marginTop: spacing.lg,
-            paddingTop: spacing.md,
-            borderTopWidth: 1,
-            borderTopColor: theme.colors.border,
-          }}
-        >
-          <Ionicons name="mail-outline" size={15} color={theme.colors.textMuted} />
-          <Text variant="footnote" tone="muted" className="ml-sm flex-1">
-            {remainingAfter} of {INTEREST_LIMIT} enquiries left after this one.
-          </Text>
-        </View>
+        {remainingAfter !== null ? (
+          <View
+            className="flex-row items-center"
+            style={{
+              marginTop: spacing.lg,
+              paddingTop: spacing.md,
+              borderTopWidth: 1,
+              borderTopColor: theme.colors.border,
+            }}
+          >
+            <Ionicons name="mail-outline" size={15} color={theme.colors.textMuted} />
+            <Text variant="footnote" tone="muted" className="ml-sm flex-1">
+              {remainingAfter} of {INTEREST_LIMIT} enquiries left after this one.
+            </Text>
+          </View>
+        ) : null}
 
-        <Button
-          label="Send enquiry"
-          className="mt-lg"
-          fullWidth
-          onPress={save.confirm}
-        />
+        <Button label="Send enquiry" className="mt-lg" fullWidth onPress={onConfirm} />
         <Button
           label="Cancel"
           variant="ghost"
           align="center"
           className="mt-xs"
-          onPress={save.cancel}
+          onPress={onCancel}
         />
       </View>
     </Sheet>

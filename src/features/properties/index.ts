@@ -22,7 +22,7 @@ export {
   type PropertyDetailQuery,
   type PropertyFeed,
 } from './hooks';
-export { DetailHero, HERO_HEIGHT, type DetailHeroProps } from './components/DetailHero';
+export { DetailHero, heroHeight, type DetailHeroProps } from './components/DetailHero';
 export {
   DetailHeader,
   HEADER_BAR_HEIGHT,

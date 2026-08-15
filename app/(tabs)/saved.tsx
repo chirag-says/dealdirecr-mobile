@@ -93,7 +93,15 @@ export default function SavedScreen() {
  * silently does nothing.
  */
 function InterestedSheets({ save }: { save: SaveToggle }) {
-  return <EnquirySheet save={save} />;
+  return (
+    <EnquirySheet
+      visible={save.pending !== null}
+      subtitle={save.pending?.locationLabel || save.pending?.title}
+      remaining={save.remaining}
+      onConfirm={save.confirm}
+      onCancel={save.cancel}
+    />
+  );
 }
 
 /** Module-level so the reference is stable; see `PropertyList`'s note on why
