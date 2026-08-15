@@ -65,6 +65,15 @@ export interface ListingFormValues {
   totalSqft: string;
   carpetSqft: string;
   builtUpSqft: string;
+  /**
+   * Added 2026-08-13 (defect F13): the website sends these three and mobile
+   * could not, so a mobile-created listing showed a blank ₹/sqft line and no
+   * super-built-up or plot area on the website. All three are real nested
+   * `area.*` schema paths AND on the add whitelist — verified, unlike the flat
+   * `builtUpArea`/`carpetArea` whitelist entries the module doc warns about.
+   */
+  superBuiltUpSqft: string;
+  plotSqft: string;
 
   // Residential
   bhk: string;
@@ -89,6 +98,22 @@ export interface ListingFormValues {
   parkingOpen: string;
   reraId: string;
 
+  /**
+   * `YYYY-MM-DD`, or empty. A text field rather than a native date picker:
+   * no date-picker module is installed and adding one is its own
+   * native-module decision (HANDOFF §5.1), not a default this form forces.
+   * Schema type is `Date`, so the backend parses the string.
+   */
+  availableFrom: string;
+
+  /** `legal.*` booleans the website collects and mobile previously could not. */
+  occupancyCertificate: boolean;
+  tradeLicense: boolean;
+  fireNoc: boolean;
+
+  /** Free-text landmarks, stored as `address.nearby: [String]`. */
+  nearby: string[];
+
   amenities: string[];
 }
 
@@ -112,6 +137,8 @@ export const EMPTY_LISTING_FORM: ListingFormValues = {
   totalSqft: '',
   carpetSqft: '',
   builtUpSqft: '',
+  superBuiltUpSqft: '',
+  plotSqft: '',
   bhk: '',
   bedrooms: '',
   bathrooms: '',
@@ -130,6 +157,11 @@ export const EMPTY_LISTING_FORM: ListingFormValues = {
   parkingCovered: '',
   parkingOpen: '',
   reraId: '',
+  availableFrom: '',
+  occupancyCertificate: false,
+  tradeLicense: false,
+  fireNoc: false,
+  nearby: [],
   amenities: [],
 };
 

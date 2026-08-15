@@ -15,35 +15,37 @@ import type { PropertySummary } from '../types';
  * row from the next, so it needs no container. This one sits in a rail, where
  * a container is what makes a card feel like an object you could pick up.
  *
- * A hairline border rather than a shadow. The Home redesign's brief is
- * explicit about restraint — minimal borders, almost no shadow — and a soft
- * drop shadow under every card in a rail of eight is a small cost repeated
- * often enough to read as "generated app" rather than "designed one". A 1px
- * `border` costs nothing at scroll and separates the card from the page just
- * as clearly.
+ * A shadow rather than a hairline border — changed 2026-08-14. This carried a
+ * border for most of its life and the reasoning was sound at the time: on a
+ * near-white page a soft shadow under every card in a rail of eight is cost
+ * without effect, so an outline did the job for less. The page has since moved
+ * to `palette.canvas`, several steps down the ramp, and a shadow now reads
+ * properly. It matches `PropertyCard`, which matters more than either choice
+ * on its own: the same object should not be built differently depending on
+ * which screen it appears on.
  *
  * ---------------------------------------------------------------------------
- * THE HEART IS OPT-IN, AND IT IS NOT A BOOKMARK
+ * THERE IS NO HEART ON THIS CARD, AND THERE SHOULD NOT BE ONE
  *
- * This card originally had no favourite control at all, because the version it
- * was ported from called `POST /api/users/save-property`, a route that does
- * not exist in this backend.
+ * Removed 2026-08-14 by Chirag's decision, after being opt-in and mounted by
+ * Home. Recording the reasoning here because a heart on a property card is
+ * such an obvious thing to add back.
  *
- * There IS a working list, and the heart now drives it — but it does not mean
- * what a heart usually means, and that is worth stating where the control
- * lives. `POST /properties/interested/:id` pushes the user into the listing's
- * `interestedUsers`, CREATES A LEAD FOR THE OWNER, and EMAILS THEM. The
- * owner receives the user's name, email and phone. The backend also caps the
- * list at five across the whole app and rejects the sixth.
+ * The only "save" this backend has is `POST /properties/interested/:id`. It
+ * pushes the user into the listing's `interestedUsers`, CREATES A LEAD FOR THE
+ * OWNER, and EMAILS THEM the user's name, email and phone. It is also capped
+ * at FIVE across the whole app, and the sixth is rejected with a 400.
  *
- * So a tap here is not private, not free, and not unlimited — which is the
- * opposite of every one of a heart's usual connotations. See
- * `features/properties/interest.ts` for the full argument.
+ * A heart means private, free, unlimited and quietly undoable. This action is
+ * none of those, and putting it behind a heart meant a user could spend one of
+ * five enquiries — and hand a stranger their phone number — with a thumb
+ * brushing the corner of a photo, on the app's busiest screen.
  *
- * It is therefore OPT-IN: no `onToggleSave`, no heart. The browse and detail
- * surfaces keep the labelled button with its consequence copy, which is the
- * honest control. Home renders the heart because the design calls for it, and
- * the caller owns that decision rather than this component making it silently.
+ * Every surface that offers this action now offers it the same way: a labelled
+ * button with a consequence line under it, on the detail screen where there is
+ * room to say what happens. See `features/properties/interest.ts` and
+ * `DetailActions.tsx`. A rail card has no room for that sentence, which is the
+ * real reason it should not carry the control.
  */
 
 const IMAGE_HEIGHT = 180;
@@ -78,13 +80,6 @@ export interface PropertyRailCardProps {
   /** Supplied by `Rail`, so the card and the snap interval cannot disagree. */
   width: number;
   onPress: (id: string) => void;
-  /** Filled heart. Ignored unless `onToggleSave` is also supplied. */
-  saved?: boolean;
-  /**
-   * Omit to hide the heart entirely. Supplying it is a statement that this
-   * surface accepts what the action actually does — see the note above.
-   */
-  onToggleSave?: (id: string) => void;
 }
 
 /** "3 BHK Apartment", the card's second-most scanned fact after price. */
@@ -127,16 +122,10 @@ function PropertyRailCardComponent({
   property,
   width,
   onPress,
-  saved = false,
-  onToggleSave,
 }: PropertyRailCardProps) {
   const theme = useTheme();
   const type = typeLine(property);
   const handlePress = useCallback(() => onPress(property.id), [onPress, property.id]);
-  const handleToggleSave = useCallback(
-    () => onToggleSave?.(property.id),
-    [onToggleSave, property.id]
-  );
 
   return (
     <PressableScale
@@ -146,8 +135,16 @@ function PropertyRailCardComponent({
         width,
         borderRadius: radius.lg,
         backgroundColor: theme.colors.surface,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        // Shadow, not a border — matched to `PropertyCard` so the same object
+        // does not change its construction between Home and the browse list.
+        // The page is dark enough now (`palette.canvas`) for a shadow to read;
+        // when this card was written it was not, which is why it outlined
+        // itself instead.
+        shadowColor: '#000',
+        shadowOpacity: 0.07,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
         overflow: 'hidden',
       }}
     >
@@ -189,33 +186,6 @@ function PropertyRailCardComponent({
           </View>
         ) : null}
 
-        {onToggleSave ? (
-          <PressableScale
-            accessibilityLabel={
-              saved
-                ? `Remove ${property.title} from your interest list`
-                : `Tell the owner of ${property.title} you are interested`
-            }
-            onPress={handleToggleSave}
-            style={{
-              position: 'absolute',
-              right: spacing.md,
-              top: spacing.md,
-              width: 36,
-              height: 36,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: radius.md,
-              backgroundColor: 'rgba(255,255,255,0.94)',
-            }}
-          >
-            <Ionicons
-              name={saved ? 'heart' : 'heart-outline'}
-              size={19}
-              color={saved ? theme.colors.brand : theme.colors.textPrimary}
-            />
-          </PressableScale>
-        ) : null}
       </View>
 
       <View style={{ padding: spacing.md }}>

@@ -35,6 +35,15 @@ export const palette = {
   neutral0: '#FFFFFF',
   neutral50: '#FAFAFA',
   neutral100: '#F5F5F5',
+  /**
+   * The grouped-list page background. Cooler and a step deeper than
+   * `neutral50`, which at 2% off white was too close to `surface` for a white
+   * card to separate from it without a border — see `lightColors.background`.
+   * The slight blue cast is deliberate: a pure grey page under white cards
+   * reads as dirty, which is why iOS greys its grouped background toward blue
+   * rather than toward black.
+   */
+  canvas: '#F1F2F6',
   neutral200: '#E5E5E5',
   neutral300: '#D4D4D4',
   neutral400: '#A3A3A3',
@@ -71,6 +80,8 @@ export interface ColorScheme {
 
   /** Brand mark color. Not an action color. */
   brand: string;
+  /** Tinted brand fill, for a selected state that must not read as an alert. */
+  brandMuted: string;
 
   success: string;
   successMuted: string;
@@ -137,8 +148,13 @@ export const lightColors: ColorScheme = {
    *
    * Dark mode already worked this way (`neutral950` page, `neutral900` surface).
    * This makes light mode agree.
+   *
+   * DEEPENED 2026-08-13. `neutral50` was the right idea at the wrong strength:
+   * at 2% off white the separation was theoretical, so cards still needed
+   * their borders and the app still read as flat. `canvas` is far enough down
+   * to carry a white surface on its own.
    */
-  background: palette.neutral50,
+  background: palette.canvas,
   surface: palette.neutral0,
   surfaceMuted: palette.neutral100,
   border: palette.neutral200,
@@ -154,6 +170,7 @@ export const lightColors: ColorScheme = {
   accentMuted: palette.blue100,
 
   brand: palette.red600,
+  brandMuted: palette.red100,
 
   success: palette.green600,
   successMuted: palette.green100,
@@ -183,6 +200,7 @@ export const darkColors: ColorScheme = {
   accentMuted: palette.blue950,
 
   brand: palette.red500,
+  brandMuted: '#3B0A0A',
 
   success: palette.green500,
   successMuted: '#052E16',
@@ -194,6 +212,30 @@ export const darkColors: ColorScheme = {
   scrim: 'rgba(0, 0, 0, 0.6)',
   chrome: 'rgba(23, 23, 23, 0.72)',
 };
+
+/**
+ * A token colour at partial alpha.
+ *
+ * For the one case a role cannot cover: a gradient that has to fade a colour
+ * into its own transparent form. `'transparent'` is not that — it resolves to
+ * transparent BLACK, so fading a pale surface into it runs through grey and
+ * reads as a smudge rather than a fade.
+ *
+ * Takes the six-digit hex the palette is written in. Anything else is returned
+ * untouched rather than mangled, because a caller passing an `rgba()` string
+ * already has what this function produces.
+ */
+export function withAlpha(color: string, alpha: number): string {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) return color;
+
+  const value = parseInt(match[1] as string, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 export const colorSchemes = {
   light: lightColors,

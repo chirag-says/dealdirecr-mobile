@@ -1,13 +1,11 @@
 import { FlashList } from '@shopify/flash-list';
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { LEAD_STATUSES, statusLabel, statusTone, useLeads } from '@/features/leads';
-import { useTheme } from '@/theme';
 import type { Lead, LeadStatus } from '@/types/backend/lead';
-import { Avatar, Badge, Card, Chip, EmptyState, ErrorState, PriceLabel, Screen, Skeleton, Text } from '@/ui';
+import { Avatar, Badge, Card, Chip, EmptyState, ErrorState, PriceLabel, Screen, ScreenHeader, Skeleton, Text } from '@/ui';
 
 /** The stats block's shape, read from `leadController.getLeads`. */
 interface LeadStats {
@@ -18,7 +16,6 @@ interface LeadStats {
 
 export default function LeadsScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const [filter, setFilter] = useState<LeadStatus | undefined>(undefined);
   const { leads, stats, isLoading, isRefreshing, isFetchingMore, error, refresh, loadMore } =
     useLeads(filter);
@@ -27,18 +24,7 @@ export default function LeadsScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Leads</Text>
-      </View>
+      <ScreenHeader title="Leads" backTo="/(tabs)/profile" />
 
       {stats ? (
         <View className="flex-row px-lg pb-base">
@@ -65,7 +51,7 @@ export default function LeadsScreen() {
       />
 
       {isLoading ? (
-        <View className="px-lg">
+        <View className="px-base">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} height={88} className="mb-base" radius={12} />
           ))}

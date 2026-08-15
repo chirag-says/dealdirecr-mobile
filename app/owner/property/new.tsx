@@ -14,7 +14,9 @@ import {
   useAddListing,
   type CategorizedPhoto,
 } from '@/features/listings';
+import { RewardReveal } from '@/features/rewards';
 import { useTheme } from '@/theme';
+import type { ActionReward } from '@/types/backend/property';
 import { Screen, Text } from '@/ui';
 
 /**
@@ -32,6 +34,8 @@ export default function NewPropertyScreen() {
 
   const [values, setValues] = useState(EMPTY_LISTING_FORM);
   const [newPhotos, setNewPhotos] = useState<CategorizedPhoto[]>([]);
+  const [pendingReward, setPendingReward] = useState<ActionReward | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasListingDraft()) return;
@@ -47,14 +51,33 @@ export default function NewPropertyScreen() {
     saveListingDraft(next);
   };
 
+  /**
+   * Listing a property earns points, and the response says how many. The
+   * reveal is shown BEFORE navigating away — dismissing it is what completes
+   * the submit. Navigating first would unmount this screen and take the reveal
+   * with it, which is how the award went unseen before 2026-08-13.
+   */
   const handleSubmit = async () => {
     try {
       const response = await add({ values, newPhotos });
       clearListingDraft();
-      router.replace(`/property/${response.data._id}`);
+
+      const propertyId = response.data._id;
+      if (response.reward && response.reward.pointsAwarded > 0) {
+        setPendingReward(response.reward);
+        setCreatedId(propertyId);
+        return;
+      }
+
+      router.replace(`/property/${propertyId}`);
     } catch {
       // surfaced via `error` below
     }
+  };
+
+  const dismissReward = () => {
+    setPendingReward(null);
+    if (createdId) router.replace(`/property/${createdId}`);
   };
 
   return (
@@ -84,6 +107,8 @@ export default function NewPropertyScreen() {
         isSubmitting={isPending}
         submitError={error instanceof ApiError ? error.message : undefined}
       />
+
+      <RewardReveal reward={pendingReward} onDismiss={dismissReward} />
     </Screen>
   );
 }

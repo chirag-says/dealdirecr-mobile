@@ -26,8 +26,16 @@ export { DetailHero, HERO_HEIGHT, type DetailHeroProps } from './components/Deta
 export {
   DetailHeader,
   HEADER_BAR_HEIGHT,
+  useHeaderProgress,
   type DetailHeaderProps,
 } from './components/DetailHeader';
+export {
+  DetailSectionNav,
+  SECTION_NAV_HEIGHT,
+  useSectionRegistry,
+  type DetailSection,
+  type DetailSectionNavProps,
+} from './components/DetailSectionNav';
 export { ExpandableText, type ExpandableTextProps } from './components/ExpandableText';
 export { DetailFacts, type DetailFactsProps } from './components/DetailFacts';
 export { DetailOwner, type DetailOwnerProps } from './components/DetailOwner';
@@ -49,10 +57,14 @@ export { EmiCalculator, type EmiCalculatorProps } from './components/EmiCalculat
 export { useInterest, type InterestState } from './interest';
 export {
   PropertyCard,
-  COVER_HEIGHT,
+  COVER_ASPECT,
+  CARD_RADIUS,
   type PropertyCardProps,
-  type PropertyCompareProps,
+  type CompareControlProps,
+  type SaveControlProps,
 } from './components/PropertyCard';
+export { PropertyListItem } from './components/PropertyListItem';
+export { SavedPropertyCard, type SavedPropertyCardProps } from './components/SavedPropertyCard';
 export { PropertyCardSkeleton, PropertyListSkeleton } from './components/PropertyCardSkeleton';
 export { PropertyList, type PropertyListProps } from './components/PropertyList';
 export { PropertyStrip, type PropertyStripProps } from './components/PropertyStrip';

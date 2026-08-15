@@ -1,13 +1,13 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ApiError } from '@/api';
 import { useClaimDealReward } from '@/features/rewards';
 import { useTheme } from '@/theme';
 import type { ClaimDealRewardResponse } from '@/types/backend/property';
-import { Button, ErrorState, Screen, Skeleton, Text } from '@/ui';
+import { Button, ErrorState, Screen, ScreenHeader, Skeleton, Text } from '@/ui';
 
 /**
  * Claim the reward for an approved close-deal verification.
@@ -42,22 +42,10 @@ export default function ClaimRewardScreen() {
       });
   }, [verificationId, claim]);
 
-  const handleBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'));
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={handleBack}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Deal reward</Text>
-      </View>
+      <ScreenHeader title="Deal reward" />
 
       <View className="flex-1 items-center justify-center px-xl">
         {isPending && !result ? (

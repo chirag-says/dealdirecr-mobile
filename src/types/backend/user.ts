@@ -86,6 +86,8 @@ export interface RegisterRequest {
 export interface VerifyOtpRequest {
   email: string;
   otp: string;
+  /** Carried from the register form so referral attribution is not lost. */
+  referralCode?: string;
 }
 
 export interface ResendOtpRequest {
@@ -98,12 +100,16 @@ export interface LoginRequest {
 }
 
 export interface ForgotPasswordRequest {
-  email: string;
+  phone: string;
+  /** Accepted as fallback if phone is not provided. */
+  email?: string;
 }
 
 export interface ResetPasswordRequest {
-  token: string;
-  password: string;
+  phone?: string;
+  email?: string;
+  otp: string;
+  newPassword: string;
 }
 
 export interface ChangePasswordRequest {

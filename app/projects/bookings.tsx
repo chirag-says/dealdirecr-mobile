@@ -1,11 +1,9 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { useMyBookings } from '@/features/projects';
-import { useTheme } from '@/theme';
 import type { ProjectBooking } from '@/types/backend/project';
-import { Badge, Card, EmptyState, ErrorState, Screen, Skeleton, Text } from '@/ui';
+import { Badge, Card, EmptyState, ErrorState, Screen, ScreenHeader, Skeleton, Text } from '@/ui';
 
 /**
  * My bookings. Not part of the M0 route scaffold — screen #42 in the
@@ -14,26 +12,14 @@ import { Badge, Card, EmptyState, ErrorState, Screen, Skeleton, Text } from '@/u
  */
 export default function MyBookingsScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const { bookings, isLoading, isRefreshing, error, refresh } = useMyBookings();
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">My bookings</Text>
-      </View>
+      <ScreenHeader title="My bookings" backTo="/(tabs)/profile" />
 
       {isLoading ? (
-        <View className="px-lg">
+        <View className="px-base">
           {[0, 1].map((i) => (
             <Skeleton key={i} height={88} className="mb-base" radius={12} />
           ))}

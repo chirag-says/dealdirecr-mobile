@@ -7,6 +7,8 @@ import type { ListingIntent } from '@/features/properties';
 import { radius, spacing, useTheme, type Theme } from '@/theme';
 import { PressableScale, Text } from '@/ui';
 
+import { HeroSearchField } from './HeroSearchField';
+
 /**
  * The hero.
  *
@@ -72,27 +74,25 @@ const ARTWORK_RISE = spacing['4xl'] + spacing.sm;
 const CARD_OVERLAP = spacing['4xl'];
 
 export interface HeroProps {
-  onSearch: () => void;
+  /** Fires with the committed search term. Empty means "browse everything". */
+  onSearch: (term: string) => void;
+  onOpenFilters: () => void;
   onIntent: (intent: ListingIntent) => void;
   onPostProperty: () => void;
   onNotifications: () => void;
   onProfile: () => void;
-  onMessages: () => void;
   /** Unread notifications. Only presence is drawn, as a dot. */
   notificationBadge?: string | null;
-  /** Unread chats, for the messages badge. */
-  unreadChats?: number;
 }
 
 export function Hero({
   onSearch,
+  onOpenFilters,
   onIntent,
   onPostProperty,
   onNotifications,
   onProfile,
-  onMessages,
   notificationBadge,
-  unreadChats = 0,
 }: HeroProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -110,18 +110,11 @@ export function Hero({
 
         <View className="flex-row items-center">
           {/*
-            Messages lives here because the bottom bar gave its fifth slot to
-            the Post action. See `app/(tabs)/_layout.tsx` — this icon is what
-            keeps chat reachable, so it carries the unread count the tab used
-            to show.
+            No Messages icon. Chat is built but unmounted product-wide
+            (HANDOFF §9.1 D2), matching the website, which mounts no chat UI
+            either. The feature code is still on disk; this was its last entry
+            point on Home.
           */}
-          <HeaderIcon
-            icon="chatbubble-outline"
-            label="Messages"
-            onPress={onMessages}
-            dot={unreadChats > 0}
-            theme={theme}
-          />
           <HeaderIcon
             icon="notifications-outline"
             label={notificationBadge ? `Notifications, ${notificationBadge} unread` : 'Notifications'}
@@ -213,36 +206,11 @@ export function Hero({
         }}
       >
         {/*
-          A button that LOOKS like a field. The real input lives on the search
-          screen with its suggestions and recent searches; a `TextInput` here
-          would raise the keyboard, offer nothing, then navigate away on submit.
+          A real field. It was a button dressed as one until 2026-08-13, which
+          opened a full-screen modal — see `HeroSearchField` for why that was
+          replaced rather than restyled.
         */}
-        <PressableScale
-          accessibilityLabel="Search properties"
-          accessibilityHint="Opens search"
-          onPress={onSearch}
-          activeScale={0.985}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            height: 44,
-            paddingHorizontal: spacing.sm,
-          }}
-        >
-          <Ionicons name="search" size={21} color={theme.colors.textPrimary} />
-          <Text variant="callout" tone="muted" numberOfLines={1} className="ml-md flex-1">
-            Search by location, property or keyword…
-          </Text>
-          <View
-            style={{
-              width: 1,
-              height: 24,
-              backgroundColor: theme.colors.border,
-              marginHorizontal: spacing.md,
-            }}
-          />
-          <Ionicons name="options-outline" size={21} color={theme.colors.textPrimary} />
-        </PressableScale>
+        <HeroSearchField onSubmit={onSearch} onOpenFilters={onOpenFilters} />
 
         <View className="mt-md flex-row items-center" style={{ gap: spacing.sm }}>
           {/*

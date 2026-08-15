@@ -14,6 +14,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import { useTheme } from '@/theme';
 import { Image, Scrim, Text } from '@/ui';
 import type { GalleryImage } from '../types';
 
@@ -97,6 +98,7 @@ export interface DetailHeroProps {
 
 export function DetailHero({ images, fallbackUri, onOpenGallery, scrollY }: DetailHeroProps) {
   const { width } = useWindowDimensions();
+  const theme = useTheme();
   const [index, setIndex] = useState(0);
   const reduceMotion = useReducedMotion();
 
@@ -172,7 +174,7 @@ export function DetailHero({ images, fallbackUri, onOpenGallery, scrollY }: Deta
           className="items-center justify-center bg-surface-muted"
           style={{ width: '100%', height: HERO_HEIGHT }}
         >
-          <Ionicons name="image-outline" size={32} color="#94a3b8" />
+          <Ionicons name="image-outline" size={32} color={theme.colors.textMuted} />
           <Text variant="footnote" tone="muted" className="mt-sm">
             No photo
           </Text>

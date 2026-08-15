@@ -1,8 +1,7 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import type * as ImagePickerModule from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 
 import { ApiError } from '@/api';
 import { optionalNativeModule } from '@/config/optionalNative';
@@ -12,8 +11,17 @@ import {
   useJoinCampaign,
   useUploadPaymentProof,
 } from '@/features/projects';
-import { useTheme } from '@/theme';
-import { Badge, Button, Card, ErrorState, Screen, Skeleton, Text } from '@/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  ErrorState,
+  Screen,
+  ScreenHeader,
+  Skeleton,
+  Text,
+  useToast,
+} from '@/ui';
 
 /**
  * Optional: absent in Expo Go. A top-level import would throw while Expo
@@ -45,9 +53,8 @@ function waitMessage(seconds: number | undefined): string {
  * the error message rather than guessed at client-side.
  */
 export default function CampaignScreen() {
-  const router = useRouter();
-  const theme = useTheme();
   const { campaignId } = useLocalSearchParams<{ campaignId: string }>();
+  const toast = useToast();
   const { campaign, isLoading, error, refresh } = useCampaignDetail(campaignId);
   const { join, isPending: isJoining, error: joinError } = useJoinCampaign(campaignId);
   const { exit, isPending: isExiting, error: exitError } = useExitCampaign(campaignId);
@@ -59,7 +66,7 @@ export default function CampaignScreen() {
   if (isLoading) {
     return (
       <Screen>
-        <View className="p-lg">
+        <View className="p-base">
           <Skeleton height={200} radius={16} />
         </View>
       </Screen>
@@ -99,6 +106,7 @@ export default function CampaignScreen() {
           try {
             await exit();
             setJoinedThisSession(false);
+            toast.show('You have left this group buy.');
           } catch {
             // surfaced via exitError below
           }
@@ -129,20 +137,7 @@ export default function CampaignScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2" numberOfLines={1} className="flex-1">
-          Group buy
-        </Text>
-      </View>
+      <ScreenHeader title="Group buy" backTo="/projects" />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         <Card>

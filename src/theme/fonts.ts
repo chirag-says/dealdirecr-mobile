@@ -1,15 +1,25 @@
 /**
- * DM Sans, scoped to the Home redesign.
+ * DM Sans. The app's typeface, everywhere.
  *
- * Every other screen in the app deliberately leaves `fontFamily` unset so iOS
- * and Android resolve their own system face (see `typography.ts`). Home's
- * brief calls for DM Sans specifically, as a one-screen brand statement rather
- * than an app-wide typeface change, so the mapping lives here and is consumed
- * only by `features/home/components/HomeText`, never by the base `Text`
- * primitive.
+ * ---------------------------------------------------------------------------
+ * WHY THIS IS NOW APP-WIDE (changed 2026-08-13)
  *
- * Keyed by weight rather than by usage, so any `typography` token can resolve
- * its DM Sans face by reading its own `fontWeight` — see `HomeText`.
+ * It used to be scoped to Home, as "a one-screen brand statement". That was a
+ * mistake, and an obvious one the moment you used the app: Home rendered in DM
+ * Sans and every other screen in the platform system face, so moving between
+ * tabs looked like moving between two different products. A typeface is not a
+ * decoration you apply to your best screen; it is the thing that makes twenty
+ * screens read as one app.
+ *
+ * The cost is real and worth stating. The system faces (SF, Roboto) ship
+ * optical sizing and per-size legibility tuning that a single bundled webfont
+ * does not have, which is exactly what `typography.ts` originally chose them
+ * for. DM Sans has one outline per weight. We accept slightly less refined
+ * rendering at the extremes in exchange for the app looking like itself.
+ *
+ * Keyed by weight rather than by usage, so any `typography` token resolves its
+ * face by reading its own `fontWeight` — see `ui/Text.tsx`. Provided once at
+ * the root layout; nothing else needs to know.
  */
 
 export const dmSans = {

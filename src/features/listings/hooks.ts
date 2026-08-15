@@ -47,9 +47,16 @@ export function useAddListing() {
       values: ListingFormValues;
       newPhotos: CategorizedPhoto[];
     }) => call(propertiesEndpoints.add, { data: buildAddFormData(values, newPhotos) }),
-    onSuccess: () => {
+    onSuccess: (response) => {
       clearListingDraft();
       void queryClient.invalidateQueries({ queryKey: qk.myProperties() });
+
+      // Listing a property earns points. The wallet is now stale by that much;
+      // the caller decides whether to reveal the award (see `RewardReveal`).
+      if (response.reward && response.reward.pointsAwarded > 0) {
+        void queryClient.invalidateQueries({ queryKey: qk.rewardsWallet() });
+        void queryClient.invalidateQueries({ queryKey: qk.rewardsTransactions() });
+      }
     },
   });
 

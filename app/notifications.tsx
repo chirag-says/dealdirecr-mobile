@@ -1,9 +1,9 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, RefreshControl, View } from 'react-native';
+import { RefreshControl, View } from 'react-native';
 
+import { SignInPrompt } from '@/auth';
 import {
   NotificationRow,
   resolveNotificationTarget,
@@ -13,7 +13,14 @@ import {
 } from '@/features/notifications';
 import { useTheme } from '@/theme';
 import type { AppNotification } from '@/types/backend/notification';
-import { EmptyState, ErrorState, Screen, Skeleton, Text } from '@/ui';
+import {
+  EmptyState,
+  ErrorState,
+  HeaderAction,
+  Screen,
+  ScreenHeader,
+  Skeleton,
+} from '@/ui';
 
 /**
  * Notifications.
@@ -51,49 +58,28 @@ export default function NotificationsScreen() {
     [markRead, router]
   );
 
-  const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)');
-  }, [router]);
-
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={handleBack}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-
-        <Text variant="title2" className="flex-1">
-          Notifications
-        </Text>
-
-        {unreadCount > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Mark all as read"
-            onPress={markAllRead}
-            hitSlop={8}
-            style={({ pressed }) => (pressed ? { opacity: 0.6 } : undefined)}
-          >
-            <Text variant="footnote" tone="accent">
-              Mark all read
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <ScreenHeader
+        title="Notifications"
+        subtitle={unreadCount > 0 ? `${unreadCount} unread` : undefined}
+        actions={
+          unreadCount > 0 ? (
+            <HeaderAction
+              icon="checkmark-done-outline"
+              label="Mark all as read"
+              tone="accent"
+              onPress={markAllRead}
+            />
+          ) : null
+        }
+      />
 
       {requiresAuth ? (
-        <EmptyState
-          title="Sign in to see notifications"
+        <SignInPrompt
+          icon="notifications-outline"
+          title="Your notifications"
           description="Alerts about your listings, leads and saved searches appear here."
-          actionLabel="Sign in"
-          onAction={() => router.push('/(auth)/login')}
         />
       ) : isLoading ? (
         <NotificationsSkeleton />
@@ -128,7 +114,7 @@ export default function NotificationsScreen() {
 
 function NotificationsSkeleton() {
   return (
-    <View className="px-lg pt-sm">
+    <View className="px-base pt-sm">
       {[0, 1, 2, 3, 4, 5].map((row) => (
         <View key={row} className="py-md">
           <Skeleton width="55%" height={16} />

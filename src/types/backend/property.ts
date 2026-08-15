@@ -314,6 +314,50 @@ export interface InterestCheckResponse {
   isInterested: boolean;
 }
 
+/**
+ * The reward payload several write endpoints carry when the action earned
+ * points. Source: `rewardService.awardPoints`'s success return.
+ *
+ * NULL is the normal case, not an error: `markInterested` awards nothing once
+ * the user has made 5 enquiries that day (`rewardService.js:239-246` returns
+ * `pointsAwarded: 0`, which the controller maps to `reward: null`), and it
+ * swallows any reward failure so the primary action still succeeds.
+ */
+export interface ActionReward {
+  success: true;
+  pointsAwarded: number;
+  cashValue?: number;
+  newBalance?: number;
+  totalPoints?: number;
+  tier?: string;
+  rewardCategory?: string;
+  rewardTier?: string;
+  description?: string;
+}
+
+/**
+ * `POST /properties/add`. The `data` envelope plus a reward for listing.
+ * `propertyController.js:530-559`.
+ */
+export interface AddPropertyResponse {
+  success: true;
+  data: Property;
+  reward: ActionReward | null;
+}
+
+/**
+ * `POST /properties/interested/:id`.
+ *
+ * The `reward` key is why this is typed at all: the website surfaces it as a
+ * reveal (`PropertyDetailsContent.jsx:917-919` → `RewardRevealRouter`), and
+ * mobile discarded it until 2026-08-13, so points were earned silently.
+ */
+export interface MarkInterestedResponse {
+  success: true;
+  message: string;
+  reward: ActionReward | null;
+}
+
 // --- Close deal / claim reward ---------------------------------------------
 
 export type ClosingType = 'sold' | 'rented';

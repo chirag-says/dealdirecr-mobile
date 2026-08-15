@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { ApiError } from '@/api';
 import { useAuth } from '@/auth';
@@ -22,6 +22,7 @@ import {
   KeyboardAvoider,
   PriceLabel,
   Screen,
+  ScreenHeader,
   Sheet,
   Skeleton,
   Text,
@@ -33,12 +34,27 @@ export default function UnitTypeScreen() {
   const { unitTypeId } = useLocalSearchParams<{ unitTypeId: string }>();
   const { unitType, isLoading, error, refresh } = useUnitTypeDetail(unitTypeId);
   const { campaigns } = useCampaignsForUnitType(unitTypeId);
+  const { status } = useAuth();
   const [bookingOpen, setBookingOpen] = useState(false);
+
+  const isAuthenticated = status === 'authenticated';
+
+  // `POST /bookings` is authMiddleware-gated, so a guest who filled this form
+  // in would only discover that at submit — and a 401 there reads as a dead
+  // session rather than "please sign in". Gate before the form opens, which
+  // is what the website does too.
+  const handleBookPress = () => {
+    if (!isAuthenticated) {
+      router.push('/(auth)/login');
+      return;
+    }
+    setBookingOpen(true);
+  };
 
   if (isLoading) {
     return (
       <Screen>
-        <View className="p-lg">
+        <View className="p-base">
           <Skeleton height={200} radius={16} className="mb-base" />
           <Skeleton height={120} radius={12} />
         </View>
@@ -61,20 +77,7 @@ export default function UnitTypeScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2" numberOfLines={1} className="flex-1">
-          {unitType.config?.name ?? 'Unit type'}
-        </Text>
-      </View>
+      <ScreenHeader title={unitType.config?.name ?? 'Unit type'} backTo="/projects" />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {floorPlan ? (
@@ -128,9 +131,9 @@ export default function UnitTypeScreen() {
 
       <View className="border-t border-border px-lg py-md">
         <Button
-          label="Book this unit"
+          label={isAuthenticated ? 'Book this unit' : 'Sign in to book'}
           disabled={typeof available === 'number' && available <= 0}
-          onPress={() => setBookingOpen(true)}
+          onPress={handleBookPress}
         />
       </View>
 
@@ -151,19 +154,22 @@ function SpecChip({ label }: { label: string }) {
 }
 
 function CampaignRow({ campaign, onPress }: { campaign: GroupBuyCampaign; onPress: () => void }) {
+  const theme = useTheme();
+
+  // `Card`'s own `onPress` rather than a wrapping `Pressable`: the bare
+  // Pressable this used had no `style` callback, so the row gave no feedback
+  // on touch at all. Card springs.
   return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card className="mb-base flex-row items-center justify-between">
-        <View className="flex-1 pr-base">
-          <Text variant="bodyEmphasis">{campaign.basics?.name ?? 'Group buy'}</Text>
-          <Text variant="footnote" tone="secondary" className="mt-xs">
-            {campaign.memberCount ?? 0} joined
-            {campaign.status ? ` · ${campaign.status}` : ''}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#9AA0A6" />
-      </Card>
-    </Pressable>
+    <Card onPress={onPress} className="mb-base flex-row items-center justify-between">
+      <View className="flex-1 pr-base">
+        <Text variant="bodyEmphasis">{campaign.basics?.name ?? 'Group buy'}</Text>
+        <Text variant="footnote" tone="secondary" className="mt-xs">
+          {campaign.memberCount ?? 0} joined
+          {campaign.status ? ` · ${campaign.status}` : ''}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+    </Card>
   );
 }
 

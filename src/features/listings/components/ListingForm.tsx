@@ -281,13 +281,39 @@ export function ListingForm({
                   containerClassName="mb-base w-[47%]"
                 />
                 <Input
-                  label="Total / plot area (sqft)"
+                  label="Total area (sqft)"
                   value={values.totalSqft}
                   onChangeText={(v) => set('totalSqft', v)}
+                  keyboardType="number-pad"
+                  containerClassName="mr-base mb-base w-[47%]"
+                />
+                <Input
+                  label="Super built-up (sqft)"
+                  value={values.superBuiltUpSqft}
+                  onChangeText={(v) => set('superBuiltUpSqft', v)}
+                  keyboardType="number-pad"
+                  containerClassName="mb-base w-[47%]"
+                />
+                <Input
+                  label="Plot area (sqft)"
+                  value={values.plotSqft}
+                  onChangeText={(v) => set('plotSqft', v)}
                   keyboardType="number-pad"
                   containerClassName="w-[47%]"
                 />
               </View>
+
+              {/* No ₹/sqft field: it is derived from price and area in
+                  `formData.ts`, the way the website derives it. */}
+
+              <Input
+                label="Available from (optional)"
+                placeholder="YYYY-MM-DD"
+                value={values.availableFrom}
+                onChangeText={(v) => set('availableFrom', v)}
+                hint="Leave blank if the property is available now"
+                containerClassName="mt-lg"
+              />
             </Card>
           )}
 
@@ -317,6 +343,33 @@ export function ListingForm({
                   />
                 </View>
                 <Input label="RERA ID (optional)" value={values.reraId} onChangeText={(v) => set('reraId', v)} />
+
+                {/*
+                  Only the true state is sent (see `formData.ts`): an unticked
+                  chip means "not stated", not "does not have one". Asserting
+                  the negative on every listing would be a claim the owner
+                  never made.
+                */}
+                <Text variant="subhead" tone="secondary" className="mb-sm mt-lg">
+                  Compliance documents available
+                </Text>
+                <View className="flex-row flex-wrap">
+                  {(
+                    [
+                      ['occupancyCertificate', 'Occupancy certificate'],
+                      ['tradeLicense', 'Trade licence'],
+                      ['fireNoc', 'Fire NOC'],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <Chip
+                      key={key}
+                      label={label}
+                      selected={values[key]}
+                      onPress={() => set(key, !values[key])}
+                      className="mb-sm mr-sm"
+                    />
+                  ))}
+                </View>
               </Card>
 
               <Card className="mt-base">

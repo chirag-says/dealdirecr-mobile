@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type * as ImagePickerModule from 'expo-image-picker';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -8,7 +8,7 @@ import { ApiError } from '@/api';
 import { optionalNativeModule } from '@/config/optionalNative';
 import { usePaymentConfig, useMyBookings, useSubmitBookingPayment } from '@/features/projects';
 import { useTheme } from '@/theme';
-import { Badge, Button, Card, EmptyState, ErrorState, Image, Input, Screen, Skeleton, Text } from '@/ui';
+import { Badge, Button, Card, EmptyState, ErrorState, Image, Input, Screen, ScreenHeader, Skeleton, Text } from '@/ui';
 
 /**
  * Booking detail and token payment submission.
@@ -32,7 +32,6 @@ const ImagePicker = optionalNativeModule(
 );
 
 export default function BookingScreen() {
-  const router = useRouter();
   const theme = useTheme();
   const { bookingId } = useLocalSearchParams<{ bookingId: string }>();
   const { bookings, isLoading, error, refresh } = useMyBookings();
@@ -56,33 +55,33 @@ export default function BookingScreen() {
     setScreenshotUri(result.assets[0].uri);
   };
 
+  // Either proof suffices, matching the backend (it rejects only when both are
+  // missing) and the website. Requiring both blocked anyone who had the bank
+  // reference to hand but no screenshot.
+  const hasProof = Boolean(screenshotUri) || utr.trim().length > 0;
+
   const handleSubmit = async () => {
-    if (!screenshotUri || !utr.trim()) return;
+    if (!hasProof) return;
     try {
-      await submitPayment({ screenshotUri, utr: utr.trim() });
+      await submitPayment({ screenshotUri, utr: utr.trim() || undefined });
       setSubmitted(true);
     } catch {
       // surfaced via submitError below
     }
   };
 
+  const paymentStatus = booking?.payment?.status;
+  // `submitted` covers the gap between a successful POST and the refetched
+  // list carrying the new status.
+  const awaitingVerification =
+    paymentStatus === 'submitted' || (submitted && paymentStatus !== 'rejected');
+
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Booking</Text>
-      </View>
+      <ScreenHeader title="Booking" />
 
       {isLoading ? (
-        <View className="p-lg">
+        <View className="p-base">
           <Skeleton height={200} radius={16} />
         </View>
       ) : error ? (
@@ -108,22 +107,51 @@ export default function BookingScreen() {
             ) : null}
           </Card>
 
-          {booking.payment?.verified ? (
-            <Card className="mt-base items-center py-lg">
+          {paymentStatus === 'verified' ? (
+            <Card padded={false} className="mt-base items-center px-base py-lg">
               <Ionicons name="checkmark-circle" size={40} color={theme.colors.success} />
               <Text variant="bodyEmphasis" className="mt-base">
                 Payment verified
               </Text>
+              {booking.payment?.utrNumber ? (
+                <Text variant="footnote" tone="secondary" className="mt-xs">
+                  Reference: {booking.payment.utrNumber}
+                </Text>
+              ) : null}
             </Card>
-          ) : booking.payment?.utr || submitted ? (
-            <Card className="mt-base items-center py-lg">
+          ) : awaitingVerification ? (
+            <Card padded={false} className="mt-base items-center px-base py-lg">
               <Ionicons name="time-outline" size={40} color={theme.colors.textMuted} />
               <Text variant="bodyEmphasis" className="mt-base">
                 Payment submitted, awaiting verification
               </Text>
+              {booking.payment?.utrNumber ? (
+                <Text variant="footnote" tone="secondary" className="mt-xs">
+                  Reference: {booking.payment.utrNumber}
+                </Text>
+              ) : null}
             </Card>
           ) : (
             <Card className="mt-base">
+              {/* A rejected payment is resubmittable through this same form,
+                  which is why the rejection notice sits above it rather than
+                  replacing it — the website does the same. */}
+              {paymentStatus === 'rejected' ? (
+                <View className="mb-base rounded-lg border border-danger/40 bg-danger/10 p-base">
+                  <Text variant="bodyEmphasis" tone="danger">
+                    Payment rejected
+                  </Text>
+                  {booking.payment?.rejectionReason ? (
+                    <Text variant="footnote" tone="secondary" className="mt-xs">
+                      {booking.payment.rejectionReason}
+                    </Text>
+                  ) : null}
+                  <Text variant="footnote" tone="secondary" className="mt-xs">
+                    Please submit your payment proof again.
+                  </Text>
+                </View>
+              ) : null}
+
               <Text variant="bodyEmphasis" className="mb-sm">
                 Pay the token amount
               </Text>
@@ -142,7 +170,8 @@ export default function BookingScreen() {
               ) : null}
 
               <Text variant="footnote" tone="secondary" className="mb-sm mt-lg">
-                After paying, upload the payment screenshot and the UTR / reference number.
+                After paying, add the payment screenshot or the UTR / reference number.
+                Either one is enough.
               </Text>
 
               <Pressable
@@ -174,7 +203,7 @@ export default function BookingScreen() {
                 label="Submit payment"
                 className="mt-lg"
                 loading={isPending}
-                disabled={!screenshotUri || !utr.trim()}
+                disabled={!hasProof}
                 onPress={() => void handleSubmit()}
               />
             </Card>

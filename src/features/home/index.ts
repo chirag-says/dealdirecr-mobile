@@ -11,7 +11,14 @@
  */
 
 export { BROWSE_SHORTCUTS, POPULAR_SEARCHES, type BrowseShortcut } from './catalog';
-export { COLLECTIONS, LOCALITIES, findCollection, type Collection, type Locality } from './collections';
+export {
+  COLLECTIONS,
+  HOME_COLLECTION_IDS,
+  LOCALITIES,
+  findCollection,
+  type Collection,
+  type Locality,
+} from './collections';
 export { CITIES, citySearchTerm, matchCity, normalizeCityName, type City } from './cities';
 export { homeImagery, localityImagery, type HomeImagery } from './imagery';
 export { useCollection, RAIL_LENGTH, type CollectionResult } from './useCollection';
@@ -19,9 +26,11 @@ export { useCityCounts, type CityCount, type CityCountsResult } from './useCityC
 export { usePopularListings, type PopularListingsResult } from './usePopularListings';
 
 export { Section, type SectionProps } from './components/Section';
+export { RecentlyViewed, type RecentlyViewedProps } from './components/RecentlyViewed';
 export { IntentCards, type IntentCardsProps } from './components/IntentCards';
 export { BrowseRow, PopularSearches, type BrowseRowProps } from './components/BrowseRow';
 export { Hero, type HeroProps } from './components/Hero';
+export { HeroSearchField, type HeroSearchFieldProps } from './components/HeroSearchField';
 export { CityGrid, type CityGridProps } from './components/CityGrid';
 export { CollectionRail, type CollectionRailProps } from './components/CollectionRail';
 export { CtaBanner, type CtaBannerProps } from './components/CtaBanner';

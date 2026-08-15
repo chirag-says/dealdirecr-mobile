@@ -3,9 +3,9 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 
-import { adaptProperty } from '@/features/properties';
 import { CloseDealSheet, useDeleteListing, useMyProperties } from '@/features/listings';
-import { useTheme } from '@/theme';
+import { adaptProperty } from '@/features/properties';
+import { gesture, screenPadding, spacing, scrollBottomPadding, useTheme } from '@/theme';
 import type { Property } from '@/types/backend/property';
 import {
   Badge,
@@ -13,12 +13,15 @@ import {
   Card,
   EmptyState,
   ErrorState,
+  HeaderAction,
   Image,
   PriceLabel,
   Refreshable,
   Screen,
+  ScreenHeader,
   Skeleton,
   Text,
+  useToast,
 } from '@/ui';
 
 /**
@@ -34,47 +37,50 @@ export default function MyPropertiesScreen() {
   const theme = useTheme();
   const { properties, isLoading, isRefreshing, error, refresh } = useMyProperties();
   const { remove, isPending: isDeleting } = useDeleteListing();
+  const toast = useToast();
   const [closingDeal, setClosingDeal] = useState<Property | null>(null);
 
+  /**
+   * Stays an `Alert`. This is a QUESTION about an irreversible action, and a
+   * question needs a deliberate answer — that is exactly what a modal is for.
+   * The confirmation that follows is a toast, because that is an answer.
+   */
   const handleDelete = (id: string, title: string) => {
     Alert.alert('Delete listing', `Remove "${title}" permanently? This cannot be undone.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => void remove(id),
+        onPress: async () => {
+          await remove(id);
+          toast.show('Listing deleted.');
+        },
       },
     ]);
   };
 
   return (
     <Screen>
-      <View className="flex-row items-center justify-between px-lg pt-md pb-sm">
-        <View className="flex-row items-center">
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-            hitSlop={12}
-            className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-          </Pressable>
-          <Text variant="title2">My listing</Text>
-        </View>
-        {properties.length === 0 && !isLoading ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push('/owner/property/new')}
-            hitSlop={8}
-          >
-            <Ionicons name="add-circle" size={28} color={theme.colors.accent} />
-          </Pressable>
-        ) : null}
-      </View>
+      {/* The add action is offered only when there is nothing to add TO — an
+          owner account is capped at one listing server-side, so the control
+          would 400 if shown beside an existing one. */}
+      <ScreenHeader
+        title="My listing"
+        backTo="/(tabs)/profile"
+        actions={
+          properties.length === 0 && !isLoading ? (
+            <HeaderAction
+              icon="add"
+              label="Add a listing"
+              tone="accent"
+              onPress={() => router.push('/owner/property/new')}
+            />
+          ) : null
+        }
+      />
 
       {isLoading ? (
-        <View className="px-lg">
+        <View className="px-base">
           <Skeleton height={220} radius={16} />
         </View>
       ) : error ? (
@@ -88,14 +94,14 @@ export default function MyPropertiesScreen() {
         />
       ) : (
         <Refreshable
-          contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
+          contentContainerStyle={{ padding: screenPadding, paddingBottom: scrollBottomPadding }}
           refreshing={isRefreshing}
           onRefresh={refresh}
         >
           {properties.map((property) => {
             const summary = adaptProperty(property);
             return (
-              <Card key={property._id} className="mb-base p-0 overflow-hidden">
+              <Card key={property._id} padded={false} className="mb-base overflow-hidden">
                 <Pressable
                   accessibilityRole="button"
                   onPress={() => router.push(`/property/${property._id}`)}
@@ -110,17 +116,18 @@ export default function MyPropertiesScreen() {
                 </Pressable>
 
                 <View className="p-base">
-                  <View className="mb-xs flex-row items-center justify-between">
-                    <Badge
-                      label={property.status ?? 'active'}
-                      tone={property.status === 'sold' || property.status === 'rented' ? 'success' : 'accent'}
-                    />
-                    <Text variant="footnote" tone="secondary">
-                      {property.views ?? 0} views
-                    </Text>
-                  </View>
+                  <Badge
+                    label={property.status ?? 'active'}
+                    tone={
+                      property.status === 'sold' || property.status === 'rented'
+                        ? 'success'
+                        : property.status === 'pending_verification'
+                          ? 'warning'
+                          : 'accent'
+                    }
+                  />
 
-                  <Text variant="bodyEmphasis" numberOfLines={1}>
+                  <Text variant="bodyEmphasis" numberOfLines={1} className="mt-sm">
                     {summary.headline ?? summary.title}
                   </Text>
                   <PriceLabel
@@ -129,36 +136,74 @@ export default function MyPropertiesScreen() {
                     className="mt-xs"
                   />
 
-                  <View className="mt-base flex-row">
-                    <Button
-                      label="Edit"
-                      variant="secondary"
-                      size="sm"
-                      className="mr-sm flex-1"
-                      onPress={() => router.push(`/owner/property/${property._id}/edit`)}
+                  {/*
+                    THE TWO NUMBERS AN OWNER OPENS THIS SCREEN FOR.
+
+                    Views was a grey footnote sharing a row with the status
+                    badge — the same weight as the word "active", which is not
+                    what it is worth. An owner checks this screen to find out
+                    whether the listing is working, and views plus enquiries is
+                    that answer. Enquiries leads, because a view is attention
+                    and an enquiry is a person.
+                  */}
+                  <View
+                    className="mt-base flex-row"
+                    style={{
+                      gap: spacing.xl,
+                      paddingTop: spacing.md,
+                      borderTopWidth: 1,
+                      borderTopColor: theme.colors.border,
+                    }}
+                  >
+                    <OwnerStat
+                      label={interestedCount(property) === 1 ? 'Enquiry' : 'Enquiries'}
+                      value={interestedCount(property)}
                     />
-                    <Button
-                      label="Delete"
-                      variant="danger"
-                      size="sm"
-                      className="flex-1"
-                      loading={isDeleting}
-                      onPress={() => handleDelete(property._id, property.title)}
-                    />
+                    <OwnerStat label="Views" value={property.views ?? 0} />
                   </View>
 
-                  {/* Matches the backend's own gate in `closeDeal`
-                      (propertyController.js:2267) exactly, so this button
-                      never offers an action the server would 400. */}
-                  {!CLOSE_DEAL_BLOCKED_STATUSES.has(property.status ?? 'active') ? (
+                  {/*
+                    Edit leads and is the only filled control. Delete moved out
+                    of the primary row: it sat as an equal-width danger button
+                    beside Edit, which gave a destructive, irreversible action
+                    the same visual claim as the routine one and put the two a
+                    thumb-width apart.
+                  */}
+                  <View className="mt-base flex-row" style={{ gap: spacing.sm }}>
                     <Button
-                      label="Close deal"
-                      variant="secondary"
+                      label="Edit listing"
                       size="sm"
-                      className="mt-sm"
-                      onPress={() => setClosingDeal(property)}
+                      className="flex-1"
+                      onPress={() => router.push(`/owner/property/${property._id}/edit`)}
                     />
-                  ) : null}
+
+                    {/* Matches the backend's own gate in `closeDeal`
+                        (propertyController.js:2267) exactly, so this button
+                        never offers an action the server would 400. */}
+                    {!CLOSE_DEAL_BLOCKED_STATUSES.has(property.status ?? 'active') ? (
+                      <Button
+                        label="Close deal"
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1"
+                        onPress={() => setClosingDeal(property)}
+                      />
+                    ) : null}
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${property.title}`}
+                    hitSlop={gesture.hitSlop}
+                    disabled={isDeleting}
+                    onPress={() => handleDelete(property._id, property.title)}
+                    className="mt-md flex-row items-center self-center active:opacity-60"
+                  >
+                    <Ionicons name="trash-outline" size={14} color={theme.colors.danger} />
+                    <Text variant="footnote" tone="danger" className="ml-xs">
+                      Delete listing
+                    </Text>
+                  </Pressable>
                 </View>
               </Card>
             );
@@ -173,11 +218,10 @@ export default function MyPropertiesScreen() {
           onClose={() => setClosingDeal(null)}
           onSuccess={() => {
             setClosingDeal(null);
-            Alert.alert(
-              'Submitted',
-              'Your deal closure request has been submitted for admin verification. ' +
-                "You'll be notified once it's approved."
-            );
+            // An answer, not a question — the user asked to close the deal and
+            // it went through. A modal here would make them dismiss a result
+            // they already expected.
+            toast.show('Submitted for verification. We will notify you once approved.', 'success');
             refresh();
           }}
         />
@@ -187,3 +231,29 @@ export default function MyPropertiesScreen() {
 }
 
 const CLOSE_DEAL_BLOCKED_STATUSES = new Set(['pending_verification', 'sold', 'rented']);
+
+/**
+ * How many people have enquired.
+ *
+ * `interestedUsers` is the same array `markInterested` pushes to and
+ * `getSavedProperties` reads back — see `features/properties/interest.ts`. Its
+ * length is the enquiry count, and `getMyProperties` populates it, so this
+ * needs no extra request.
+ */
+function interestedCount(property: Property): number {
+  return property.interestedUsers?.length ?? 0;
+}
+
+/** One measurement on the listing card. Tabular figures so a row of them lines up. */
+function OwnerStat({ label, value }: { label: string; value: number }) {
+  return (
+    <View>
+      <Text variant="title3" style={{ fontVariant: ['tabular-nums'] }}>
+        {value.toLocaleString('en-IN')}
+      </Text>
+      <Text variant="caption" tone="muted">
+        {label}
+      </Text>
+    </View>
+  );
+}

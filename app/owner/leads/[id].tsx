@@ -1,4 +1,3 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
@@ -12,9 +11,8 @@ import {
   useMarkLeadViewed,
   useUpdateLeadStatus,
 } from '@/features/leads';
-import { useTheme } from '@/theme';
 import type { LeadContactAction } from '@/types/backend/lead';
-import { Avatar, Badge, Button, Card, Chip, ErrorState, Input, Screen, Skeleton, Text } from '@/ui';
+import { Avatar, Badge, Button, Card, Chip, ErrorState, Input, Screen, ScreenHeader, Skeleton, Text } from '@/ui';
 
 const CONTACT_ACTIONS: LeadContactAction[] = ['called', 'emailed', 'whatsapp', 'met'];
 
@@ -26,7 +24,6 @@ const CONTACT_ACTIONS: LeadContactAction[] = ['called', 'emailed', 'whatsapp', '
  */
 export default function LeadDetailScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { leads, isLoading, error, refresh } = useLeads();
   const { markViewed } = useMarkLeadViewed();
@@ -44,7 +41,7 @@ export default function LeadDetailScreen() {
   if (isLoading && !lead) {
     return (
       <Screen>
-        <View className="p-lg">
+        <View className="p-base">
           <Skeleton height={300} radius={16} />
         </View>
       </Screen>
@@ -73,18 +70,7 @@ export default function LeadDetailScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Lead</Text>
-      </View>
+      <ScreenHeader title="Lead" />
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
         <Card className="flex-row items-center">

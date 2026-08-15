@@ -3,7 +3,7 @@ import { useCallback } from 'react';
 import { Alert, Linking, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '@/theme';
+import { screenPadding, spacing, useTheme } from '@/theme';
 import { Button, PressableScale, Text } from '@/ui';
 import type { InterestState } from '../interest';
 import type { PropertyDetail } from '../types';
@@ -51,14 +51,6 @@ export interface DetailActionsProps {
   property: PropertyDetail;
   interest: InterestState;
   /**
-   * Starts (or resumes) a chat and navigates there. Owned by the screen, not
-   * this component — it needs `useRouter` and a mutation the action bar has no
-   * business holding. Undefined hides the action rather than rendering it
-   * disabled: M6 wired this in after M4 shipped, and a permanently-disabled
-   * icon would be worse than none while a caller has not been updated yet.
-   */
-  onMessage?: () => void;
-  /**
    * Reports the painted height, so the scroll view above can end its content
    * clear of the bar. A hard-coded constant here would be wrong on the first
    * device with a different bottom inset, and wrong again the moment the
@@ -67,18 +59,12 @@ export interface DetailActionsProps {
   onHeightChange?: (height: number) => void;
 }
 
-export function DetailActions({
-  property,
-  interest,
-  onMessage,
-  onHeightChange,
-}: DetailActionsProps) {
+export function DetailActions({ property, interest, onHeightChange }: DetailActionsProps) {
   const insets = useSafeAreaInsets();
   const theme = useTheme();
 
   const phone = property.owner?.phone?.replace(/[^\d+]/g, '');
   const canCall = !!phone && !interest.requiresAuth;
-  const canMessage = !!onMessage && !interest.requiresAuth;
 
   const handleCall = useCallback(async () => {
     if (!phone) return;
@@ -88,6 +74,11 @@ export function DetailActions({
 
     // A simulator and some tablets have no dialler. Failing with an
     // explanation beats a press that does nothing at all.
+    //
+    // Stays an `Alert` rather than becoming a toast, unlike the other passive
+    // errors in this pass: it carries the number the user now has to dial by
+    // hand, and a toast that vanishes after 2.6 seconds is not long enough to
+    // read and transcribe ten digits.
     if (!supported) {
       Alert.alert('Cannot place calls', `Owner's number: ${phone}`);
       return;
@@ -104,11 +95,23 @@ export function DetailActions({
   return (
     <View
       onLayout={handleLayout}
-      className="bg-surface px-lg pt-md"
+      className="bg-surface"
       style={{
-        paddingBottom: insets.bottom + 12,
+        paddingHorizontal: screenPadding,
+        paddingTop: spacing.md,
+        paddingBottom: insets.bottom + spacing.md,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: theme.colors.border,
+        // An UPWARD shadow. This bar is chrome floating over content that
+        // keeps scrolling beneath it, and a hairline alone does not say that —
+        // it says "the page ends here". The shadow is what makes the last row
+        // of the attribute table read as passing under the bar rather than
+        // being cut off by it.
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: -4 },
+        elevation: 16,
       }}
     >
       {interest.error ? (
@@ -139,9 +142,6 @@ export function DetailActions({
           />
         </View>
 
-        {canMessage ? (
-          <IconAction icon="chatbubble-outline" label="Message owner" onPress={onMessage!} />
-        ) : null}
         {canCall ? (
           <IconAction icon="call-outline" label="Call owner" onPress={handleCall} />
         ) : null}

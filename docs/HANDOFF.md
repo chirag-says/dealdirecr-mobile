@@ -2,7 +2,12 @@
 
 Written 2026-08-05, updated 2026-08-07 (M7-M9), updated 2026-08-07 (M11-M13,
 M10 skipped for now), updated 2026-08-08 (M15-M22 scoped from a feature-parity
-audit against the website, same day M15–M17 were implemented — see §8).
+audit against the website, same day M15–M17 were implemented — see §8),
+**updated 2026-08-13 (§9: four product decisions D1–D4, the full defect
+register from a four-way source sweep, and the wave roadmap that supersedes
+§4's and §8's ordering)**, updated 2026-08-14 (§10: the portal-parity UI pass —
+what was measured on Housing.com, Square Yards and 99acres, what changed on
+search, the card, detail and home, and what was deliberately not copied).
 Point a new session at this file first, then
 [`../README.md`](../README.md) and [`API_CONTRACT.md`](API_CONTRACT.md).
 
@@ -37,7 +42,7 @@ each minus one map-related item still blocked on the M4 dev-client rebuild,
 | M3 | Property discovery (search, filters, infinite scroll) | **done** |
 | M4 | Property detail, gallery, map | **detail, gallery, attributes done. Map held** (§2.5) |
 | M5 | Favorites, saved searches, notifications | **done** (§2.6) |
-| M6 | Chat | **done** (§2.7) |
+| M6 | Chat | **built; entry points being unmounted** — product decision 2026-08-13, §9.1 D2 |
 | M7 | Profile, settings, rewards | **done** (§2.9) |
 | M8 | Owner mode: listings and uploads | **done** (§2.10) |
 | M9 | Leads and analytics | **done** (§2.11) |
@@ -48,12 +53,13 @@ each minus one map-related item still blocked on the M4 dev-client rebuild,
 | M14 | Store readiness and release | not started |
 
 **Working screens today:** Home, Search, property detail + gallery, Saved
-(interested list + saved searches), Messages (list + thread), notifications,
-the four auth screens, the tab shell, profile/settings/rewards, the full
-owner surface (my listing, add/edit, leads, analytics), and the full projects
-vertical (list, detail, unit types, group-buy campaigns, bookings, my
-bookings). The property detail locator map and M14 are still `Placeholder`
-stubs. **M10 (agreements) is the only milestone in M4–M13 not started.**
+(interested list + saved searches), notifications, the four auth screens, the
+tab shell, profile/settings/rewards, the full owner surface (my listing,
+add/edit, leads, analytics), and the full projects vertical (list, detail,
+unit types, group-buy campaigns, bookings, my bookings). Messages (list +
+thread) is built and working but is being unmounted per §9.1 D2, matching the
+website, which mounts no chat UI at all. The property detail locator map and
+M14 are still `Placeholder` stubs. **M10 (agreements) is the only milestone in M4–M13 not started.**
 Corrected 2026-08-09: it is not merely "skipped by instruction." The backend
 mount `app.use("/api/agreements", agreementRoutes)` is **commented out** in this
 working tree (`backend/server.js:869`) under a comment recording a client
@@ -659,14 +665,17 @@ through).
 
 ## 4. Recommended order for core logic
 
+> **Superseded 2026-08-13.** The ordering below predates the §9 decisions.
+> Item 1 (M10, agreements) is dead: the withdrawal stands (§9.1 D1). Items
+> 2–4 survive unchanged and are folded into §9.4's wave plan as held/blocked
+> items. Follow §9.4, not this list.
+
 M4 through M9 and M11 through M13 are done (§2.5–§2.14), except the
 property-detail map (held for a dev-client rebuild, §5.1) and true
-server-initiated push (blocked on a backend change request, §2.14). **M10
-(agreements) was explicitly skipped this session** and is the one gap left in
-the M4–M13 range. What's left, in order:
+server-initiated push (blocked on a backend change request, §2.14). What was
+left, in the pre-§9 ordering:
 
-1. **M10 — agreements.** Depends on M8 (done). The largest remaining
-   buyer/owner-facing gap.
+1. ~~**M10 — agreements.**~~ Withdrawn from the product; see §9.1 D1.
 2. **The map phase**, whenever a dev-client rebuild is scheduled: property
    detail's locator (§2.5) plus M8's add/edit picker, both against
    `docs/MAP_IMPLEMENTATION.md`.
@@ -837,7 +846,7 @@ session doesn't "rediscover" and re-propose them.
 | M15 | Advanced search filters + profile depth | **done** |
 | M16 | Property detail completion (map, video, nearby, EMI, compare, related) | **done except the locator map** — still blocked, §5.1 |
 | M17 | Owner transaction completion (close deal, photo categorisation, location picker) | **done except the location picker** — still blocked, §5.1 |
-| M18 | Rewards depth (tiers, terms page) | not started |
+| M18 | Rewards depth (tiers, terms page) | not started — **re-scoped 2026-08-13**: display only; redemption is a separate workstream, §9.1 D3 |
 | M19 | Project extras (brochure, RERA download) | not started |
 | M20 | Content & marketing pages (blog, about, why-us, faq, contact, press, privacy, terms) | not started |
 | M21 | Platform polish (collections rails, Sentry) | not started |
@@ -1135,8 +1144,1268 @@ them without asking again:
   stub (`Footer.jsx`, `handleSubscribe` just simulates success via
   `setTimeout`, no real API call). Not worth porting a fake feature.
 
-**Agreements (M10 of the original plan) remains skipped**, unchanged from
-§1's status table — the audit surfaced it again as the single largest
-remaining gap, and Chirag declined to schedule it in this pass. It stays the
-biggest open item in the whole roadmap; revisit as its own decision, not
-folded into M15–M22.
+**Agreements (M10 of the original plan): the withdrawal stands.** Resolved
+2026-08-13 (§9.1 D1) — Chirag confirmed agreements are out of the product,
+matching the website's own removal (page 404s, navbar links commented out,
+backend mount commented out in the working tree). It is no longer "the
+biggest open item"; it is a withdrawn feature. Do not re-propose it.
+
+---
+
+## 9. 2026-08-13 — Decisions, defect register, wave roadmap (PLAN OF RECORD)
+
+Produced from a four-way sweep: the website's reachable surface (every navbar,
+footer, and in-page link followed), the mobile app's real wiring (every route,
+entry point, and dead affordance), the original architecture plan, and a
+business-logic parity pass reading website page components against mobile
+feature modules, with the backend controller settling every disagreement.
+Where this section disagrees with §1–§8, this section wins. It also folds in
+the still-open items from `HANDOFF_AUDIT_2026-08-09.md` §6, which remains the
+authority for the auth details it documents.
+
+**Backend rule, restated and non-negotiable:** every fix below is mobile-side
+client code. The backend is live in production and is not touched. If an item
+below ever seems to need a backend change, the scope was misread; stop and
+re-check the website's implementation (the website ships all of this against
+the same backend today).
+
+### 9.1 Product decisions (Chirag, 2026-08-13)
+
+**D1 — Agreements: withdrawal stands.** Delete the three placeholder routes
+(`app/agreements/index.tsx`, `generate.tsx`, `[id].tsx`; nothing navigates to
+them and the backend mount is commented out at `backend/server.js:869`). Keep
+`src/api/endpoints/agreements.ts` and `src/types/backend/agreement.ts` on
+disk with a header stating the feature is withdrawn (audit §4.2 asked for
+exactly this), so the six typed endpoints are never read as an invitation.
+
+**D2 — Messages/chat: unmount entry points, keep the code.** The website's
+own pattern: chat is fully built there too (`ChatContext.jsx`,
+`ChatWidget.jsx`) and mounted nowhere. Mobile mirrors it:
+
+- Remove the Hero header Messages icon and its unread badge
+  (`Hero.tsx:114-127`, `app/(tabs)/index.tsx:86,147-149`, the
+  `useChatUnreadCount` import at `index.tsx:7`).
+- Remove the "Message owner" action from property detail
+  (`DetailActions.tsx:142-144` and its `onMessage` prop;
+  `app/property/[id]/index.tsx:9,128,137-147`).
+- Stop mounting `<SocketProvider>` and `<PushBridge />`
+  (`app/_layout.tsx:21-22,77-78`). Both exist solely for chat; leaving them
+  mounted keeps a live socket connection and a notification permission prompt
+  serving a feature with no UI.
+- Remove the `chat` `Tabs.Screen` registration (`app/(tabs)/_layout.tsx:35-44`,
+  already `href: null`) and update `src/ui/TabBar.tsx:26-38`, whose "WHERE
+  MESSAGES WENT" comment becomes wrong.
+- Everything else stays on disk untouched: `app/(tabs)/chat.tsx`,
+  `app/chat/[conversationId].tsx`, `src/features/chat/`, `src/socket/`,
+  `src/notifications/`, the endpoint declarations, and the
+  `socket.io-client` / `expo-notifications` dependencies.
+- Known residue, accepted: expo-router registers routes from files, so
+  `dealdirect://chat` deep links still resolve. No in-app path reaches them.
+  If that ever matters, add a redirect guard; do not delete the screens.
+
+**D3 — Rewards redemption: separate workstream, real money involved.** Not
+part of this plan. No redemption UI ships from this roadmap: the in-house
+store/redeem endpoints are deleted in the working tree (the website already
+has zero callers of either; its Redeem tab is the Hubble SDK iframe,
+`RewardsDashboardContent.jsx:373-375`), and the Hubble question (WebView,
+token handoff, the no-Origin CSRF constraint from `API_CONTRACT.md` §1.2)
+gets its own plan document and its own approval before any code. What this
+plan does do to the rewards screen is display-only honesty (W3 below).
+
+**D4 — Group buy: HELD.** Group buy is still being worked out on the website
+itself. No campaign feature work (offer display, join/exit changes, campaign
+payment-proof changes) until the website settles. Existing campaign screens
+stay as they are. The parity findings are parked in §9.5 so they are not lost.
+Booking wire-correctness fixes (F5–F8) proceed anyway: they are objectively
+wrong against the current backend regardless of where group buy lands.
+
+### 9.2 Search and Home IA — the rebuild spec
+
+Decision: **the home bar becomes the real search; the Search tab is the
+results surface; one implementation.** This is the website's own model (hero
+input with live suggestions submitting to `/properties`; the website has no
+separate `/search` route at all).
+
+What is wrong today, precisely:
+
+- The home "search bar" is a fake: a `PressableScale` with static grey text
+  (`Hero.tsx:224-249`, admitted in its own comment at `:218-223`). Tapping it
+  opens `SearchSheet`, a full-screen modal users read as "it redirected me".
+- The filter icon inside it (`Hero.tsx:248`) does nothing, and `SearchSheet`
+  has no filter UI at all.
+- `Hero`'s `onSearch` prop is dead (declared `Hero.tsx:76,90`, passed at
+  `index.tsx:141`, never called), as is its `SearchBar` import (`Hero.tsx:7`).
+- "View all" and the CTA banner navigate to the Search tab but their params
+  are discarded by the early return at `app/(tabs)/search.tsx:81` (it only
+  proceeds on `search` or `listingType`), so both land on an empty screen.
+  `sort` is dropped even when the effect does run (`search.tsx:75-78`).
+- On the Search tab, typing shows suggestions only; results render solely
+  after an explicit commit (`search.tsx:95`). Deliberate (`search.tsx:32-48`)
+  and correct under the 20/min limiter, but combined with the fake home bar it
+  reads as "search doesn't work".
+
+The spec:
+
+1. **Hero search becomes a real `TextInput`** with the existing suggestion
+   machinery (`useSuggestions`: 450 ms debounce, 2-char minimum — keep both,
+   §5.2's limiter is why) and recent searches beneath, rendered on Home, not
+   in a modal. Committing (keyboard search key, suggestion tap, recent tap)
+   routes to the Search tab with the chosen params and `editing` off.
+2. **The Search tab accepts and applies every route param it can honour**:
+   `search`, `listingType`, `sort`, and the client-side filter params. Fix the
+   `search.tsx:81` early return so "View all" (sends `sort`) and the CTA
+   banner (sends nothing: land in browse-all state showing newest, not an
+   empty prompt) both arrive on a live results screen.
+3. **The filter icon opens the existing `FilterSheet`** (built in M3/M15),
+   from both the hero bar and the Search tab.
+4. **Delete `SearchSheet.tsx`** and the dead `onSearch` prop and `SearchBar`
+   import in `Hero.tsx`. One search implementation, per §5.3.
+5. **Buy/Rent keep pushing `listingType`** (verified end-to-end into the
+   controller's `$in` expansion). Until the deploy in §9.6 happens, the live
+   API ignores the param and Buy/Rent open unfiltered results (§3.1). The
+   rebuild does not fix that; only the deploy does.
+6. **No per-keystroke result queries.** Suggestions per keystroke are the
+   budgeted affordance; results on commit, same as the website. §5.2 stands.
+
+### 9.3 Defect register — fix these, no decisions needed
+
+IDs are stable; strike them through here when fixed. Severity: **wire** =
+silently wrong data or guaranteed failure, **ux** = works but reads broken,
+**parity** = website has it, mobile doesn't, **hygiene** = dead/stale code or
+copy.
+
+| ID | Sev | Where | Defect → fix |
+|---|---|---|---|
+| F1 | wire | `features/rewards/hooks.ts:35`, `types/backend/rewards.ts:14-19`, `app/rewards/index.tsx:76` | Reads `wallet.balance`; the service returns `{totalPoints, availablePoints, tier, tierMultiplier, nextTierProgress, recentTransactions}` (`rewardService.js:314-329`). The `?? 0` fallback means **every user sees 0 points, always**. Read `availablePoints`; retype the wallet. |
+| F2 | wire | audit §1.3, §6.1 | Password reset is 100% broken: built from a dead website helper (email + link fiction). Rebuild phone-based: `{phone}` → SMS OTP → new `reset-password` screen with `{phone, otp, newPassword}`. Five files, listed in the audit. |
+| F3 | wire | audit §1.5, §6.2 | Buyers are sent through OTP registration the website never asks of them. Branch on the role chip: `user` → `POST /users/register-direct` (session immediately), `owner` → `register` + `verify-otp`. Declare the missing endpoint. |
+| F4 | wire | audit §1.6, §6.3 | Referral codes silently dropped on both registration paths. Owner path: carry the code to `verify-otp` (that is where attribution happens, `userController.js:456-458`). Buyer path: fixed by F3, `register-direct` reads it directly. |
+| F5 | wire | `features/projects/bookings.ts:66` | Sends `utr`; the controller destructures `utrNumber` (`bookingController.js:161`). The typed reference number is discarded and the admin gets "screenshot only". Rename the field. |
+| F6 | wire | `types/backend/project.ts:181-187`, `app/projects/booking/[bookingId].tsx:111,118` | Types `payment.utr`/`payment.verified`; the model has `utrNumber`, `status: pending\|submitted\|verified\|rejected`, `rejectionReason` (`ProjectBooking.js:80-94`). Both reads are permanently `undefined`, so the screen re-offers the submit form forever and can never show verified/rejected. Retype; render status + rejection reason + resubmit, as `MyBookingsContent.jsx:120-227` does. |
+| F7 | wire | `app/projects/unit/[unitTypeId].tsx:129-134` | Booking sheet never checks auth; a guest fills the whole form and 401s at submit (route is `authMiddleware`-gated, `bookingRoutes.js:22`). Gate before opening, as `UnitDetailContent.jsx:233-240` does. |
+| F8 | wire | `app/projects/booking/[bookingId].tsx:60,177` | Demands UTR **and** screenshot; backend and website accept either (`bookingController.js:164-166`). Loosen to either. |
+| F9 | ux | §9.2 | The whole search/IA rebuild (home bar fake, params dropped, filter icon dead, SearchSheet duplicate). |
+| F10 | ux | audit §1.4, §6.4 | OTP arrives by SMS; `verify-otp.tsx:84,101` and `endpoints/users.ts:33` say email. Pass the phone through as a display param; fix three strings. |
+| F11 | parity | `features/properties/interest.ts:82-117` | The interest/post-property reward is earned but never shown: the mutation's `reward` return is discarded, where the website routes it to a reveal (`PropertyDetailsContent.jsx:917-919`, `RewardRevealRouter.jsx`). Minimum viable: a result sheet/toast showing points won on interest, add-property, and edit paths. No spin-wheel port required. |
+| F12 | parity | `app/rewards/index.tsx`, `features/rewards/hooks.ts:90-99` | No tier, multiplier, next-tier progress, referral breakdown, or transaction pagination; the service returns all of it (`rewardService.js:340-346,466-489`). Display-only (D3). Also retire `pickTransactions`' multi-key guess: the key is confirmed `transactions`. |
+| F13 | parity | `features/listings/formData.ts`, `features/listings/types.ts:44-89` | Add-listing fields the website sends and mobile cannot: `area.superBuiltUpSqft`/`plotSqft`/`pricePerSqft`, `availableFrom`, `legal.occupancyCertificate`/`tradeLicense`/`fireNoc`, `address.nearby`, `imagesToRemove` on edit. All verified to reach the document. (`latitude`/`longitude` wait for the map/dev-client rebuild; `videoUrl` is edit-path-only by whitelist and stays out until a URL field is worth it.) |
+| F14 | parity | `CloseDealSheet.tsx:41-42,96-103` | Mobile offers Sold/Rented chips; the website derives `closingType` from `listingType` and shows it read-only, so an owner here can mark a sale "rented". Derive and display, don't ask. Also add the website's 15 MB per-file cap (`CloseDealModal.jsx:64`) next to the existing count cap. |
+| F15 | hygiene | `app/(dev)/gallery.tsx:35` | Claims "excluded from production builds"; no exclusion exists (no dev-route filtering anywhere). Exclude it for real (env-gate the route or move it out of `app/`) or delete the claim and accept it ships. |
+| F16 | hygiene | `app/(tabs)/_layout.tsx:29` | The tab bar's Post button pushes `/owner/property/new` for guests and buyers with no gate at the navigation site. Gate on auth + role, mirroring the owner surface. |
+| F17 | hygiene | `features/search/filters.ts:97-99`, `src/api/client.ts:14-16`, `CloseDealSheet.tsx:23-26`, `features/projects/campaigns.ts:47-51` | Four stale comments that contradict verified reality (listingType "doesn't exist" (it does), CSRF "no route enforces it" (twelve do, app exempt via no-Origin), an interested-users gate the website doesn't have, a group-buy limiter that doesn't reach campaigns). Fix the comments; each one is a future bug factory. |
+| F18 | hygiene | `features/notifications/targets.ts:24-29` | No target for chat-type notifications; moot once D2 lands, but confirm notification rows for conversations degrade gracefully (no dead tap). |
+
+### 9.4 Waves — the order of work
+
+> **STATUS 2026-08-13: W1–W5 are all implemented.** Verified with
+> `npx tsc --noEmit` (clean), `npx expo lint` (0 errors; pre-existing warnings
+> down from 13 to 11) and `npx expo export --platform android` (succeeds).
+> **Untested on a device**, the same caveat every milestone in this document
+> carries. What each wave actually shipped, and where it diverged from the
+> scope below, is recorded in §9.9.
+
+Each wave is independently shippable and verified with the §6 commands plus,
+finally, a device pass (nothing from M7 onward has ever run on hardware; see
+the standing caveat in §2.14).
+
+- **W1 — Correctness on the wire.** F1–F8, F10. Auth first (F2, F3, F4, F10:
+  the audit's own fix order), then the rewards balance (F1), then the booking
+  trio (F5, F6, F7, F8). Nothing here changes IA; it makes existing screens
+  tell the truth.
+- **W2 — Search/IA rebuild + unmounts.** F9 per the §9.2 spec, D1 (delete the
+  agreement stubs), D2 (unmount chat), F15, F16, F17, F18.
+- **W3 — Rewards honesty (display only, per D3).** F11, F12, plus the M18
+  terms page (static). The store/redeem sections come off the screen
+  (`app/rewards/index.tsx:90,143-222`) and their hooks are retired; the
+  endpoint declarations get a header noting the backend routes are deleted in
+  the working tree.
+- **W4 — Owner parity.** F13, F14.
+- **W5 — Content, polish, store.** M20 pages (unchanged from §8), M21
+  (mount the collections rails, one `COLLECTIONS.map()`; Sentry still blocked
+  on a DSN from Chirag), then M22/M14 store readiness last.
+
+**Held / blocked (unchanged owners):** group buy feature work (D4, §9.5);
+rewards redemption (D3, separate workstream); the map bundle (locator +
+location picker, blocked on the one dev-client rebuild covering all four
+pending native modules, §5.1); universal links (needs Apple Team ID + Android
+signing SHA-256, §2.13); true server push (needs a backend change request,
+§2.14).
+
+### 9.5 Parked group-buy findings (do not lose, do not build yet — D4)
+
+- The campaign screen never shows the offer: no `discountPerBuyer`, no
+  `buyerTargets.minBuyers/maxBuyers` progress, no `perks[]`
+  (`app/projects/campaign/[campaignId].tsx:163-167`); users are asked to join
+  terms that aren't on screen.
+- The two products currently have different group-buy semantics: the website's
+  "Join Now" opens the unit **booking** modal and never calls the campaign
+  API; mobile built real join/exit membership against
+  `/campaigns/:id/join|exit` (endpoints are real and correctly wired). Which
+  semantics win is part of the website's in-progress group-buy work; decide
+  there first.
+- The website's campaign cards read `c.name`/`c.endDate`; the model stores
+  `basics.name`/`duration.endDate`, so mobile is right and the website is
+  wrong (§9.7). Do not "fix" mobile to match.
+
+### 9.6 Deploy and repo state — the prerequisite everything sits on
+
+Production is `origin/main`. `main` is 4 commits ahead, and effectively all of
+M7–M17, this document, and the backend's agreements/rewards removal exist
+only as **uncommitted working-tree changes**. Two consequences:
+
+1. **Commit locally in coherent units** (mobile milestones, backend removals,
+   docs) so the working tree stops being the only copy of six weeks of work.
+   Local commits are fine; **pushing is deploying** (Hostinger imports
+   `origin/main`) and needs Chirag's explicit go, per standing instruction.
+2. **The next push changes the API under the app**: `listingType` starts
+   working (Buy/Rent become real: the highest-leverage single change for the
+   app), agreements go 404 (harmless once D1 lands), store/redeem go 404
+   (harmless once W3 lands). Sequence W2/W3 before or with the deploy so
+   nothing user-visible breaks on deploy day.
+
+### 9.7 Website defects found in passing (not mobile scope)
+
+For a separate website pass; recorded so they aren't rediscovered:
+
+- `profile/ProfileContent.jsx:1155` still links "Rent Agreements" →
+  `/agreements`, which 404s. The one surviving link to the withdrawn feature,
+  reachable from the navbar's Settings entry.
+- `HomeContent.jsx:455`: the "Why Choose" tile promises "Chat directly with
+  owners"; no chat is mounted anywhere on the site.
+- Hero search discards the BHK chips (`subFilters.bhk` is written,
+  `buildSearchParams` never emits it) and `commercialSubTypes`; it emits
+  `status`/`possession`/`furnishing` params no UI can set.
+- The scrolled-navbar search is a third, divergent implementation: it fetches
+  the entire unbounded `/properties/property-list` client-side to score
+  suggestions and drops city/intent/budget on submit.
+- Campaign cards read `c.name`/`c.endDate` instead of
+  `basics.name`/`duration.endDate` (`UnitDetailContent.jsx:168,172`).
+- `sitemap.js` omits live public routes: `/projects`, `/faq`, `/coming-soon`,
+  `/press-impressions`, `/rewards`.
+- Already recorded elsewhere, listed for completeness: the login page's
+  phone-field lockout (audit §7.4), `normalizePrice` inflating Lac rows in
+  the website's own filter/sort (`API_CONTRACT.md` §8 #5), the fake footer
+  newsletter (§8 "Explicitly declined").
+
+### 9.9 What W1–W5 actually shipped (2026-08-13)
+
+Implementation notes, in the order the work happened. Where the code diverged
+from §9.3's scope, the reason is here and the code carries it too.
+
+**W1 — correctness on the wire.**
+
+- **F2, F3, F4, F10 were already fixed** in the uncommitted working tree by an
+  earlier session: forgot/reset-password is phone-and-SMS with a real
+  `app/(auth)/reset-password.tsx`, `registerDirect` exists on `AuthProvider`
+  and `register.tsx` branches on role, `verifyOtp` carries `referralCode`, and
+  the verify screen displays the phone. The audit's fix list read as pending
+  and was not. One thing genuinely remained: the register screen promised
+  every signup "a 6-digit code" including buyers who never get one — now
+  role-aware.
+- **F1** — `rewards.ts` types were rewritten against the service functions
+  that produce them, not guessed: the wallet is
+  `{totalPoints, availablePoints, tier, tierMultiplier, nextTierProgress,
+  recentTransactions}`. `useWallet` reads `availablePoints` and now also
+  exposes tier, multiplier and progress. `pickTransactions`' multi-key guess is
+  retired — the key is `transactions`, with a `pagination` block beside it.
+- **F5, F6, F8** — `utr` → `utrNumber`; `payment` retyped against
+  `ProjectBooking.js` (`status` enum, `rejectionReason`, no `verified`
+  boolean); the booking screen now renders verified / awaiting / rejected
+  states with the reference number and a resubmit path; either proof suffices.
+- **F7** — the unit screen gates on auth before opening the booking sheet, and
+  the button reads "Sign in to book" for guests.
+
+**W2 — search rebuild and unmounts.**
+
+- **F9** — `HeroSearchField` (new) replaces the fake bar: a real `TextInput`
+  with the existing debounced suggestions and recent searches in a panel
+  anchored under the field. `SearchSheet.tsx` deleted. The filter icon opens
+  the real `FilterSheet` via `openFilters=1`. The Search tab now accepts
+  `search`, `listingType`, `sort`, `browse` and `openFilters`, and a new
+  `browsing` state makes "show me everything" a real results state — which is
+  what fixes "View all" and the CTA banner landing on an empty screen.
+- **D2** — chat unmounted: Hero's Messages icon, property detail's "Message
+  owner" (and `DetailActions`' `onMessage` prop), `SocketProvider` and
+  `PushBridge` in `app/_layout.tsx`. The `chat` route stays registered with
+  `href: null`; **deleting that declaration would put Messages back in the tab
+  bar**, which is why it is still there. All feature code, the socket layer
+  and both dependencies remain on disk.
+- **D1** — `app/agreements/` deleted. `endpoints/agreements.ts` keeps a header
+  stating the withdrawal and the HMAC precondition for any future restore.
+- **F15** — the dev gallery's "excluded from production" claim is now enforced
+  with a `__DEV__` guard instead of asserted. Metro still bundles the module;
+  this is a reachability guard, not a size win.
+- **F16** — the tab bar's Post button routes guests to login.
+- **F17** — four stale comments corrected. The `client.ts` one became the
+  no-WebView-may-call-this-API constraint rather than just a fact.
+
+**W3 — rewards.**
+
+- **F12** — the rewards screen shows tier, tier multiplier, a next-tier
+  progress bar and the referral milestone breakdown. Store and redeem sections
+  are gone (D3); a card states plainly that redemption happens on the website
+  and links there. `useRewardsStore`/`useRedeemReward` deleted from the
+  feature's exports with a note not to re-add them.
+- **F11** — `useInterest` now surfaces the `reward` it used to discard, via
+  `lastReward`/`clearReward`, and invalidates the wallet when points land.
+  `RewardReveal` (new) is mounted on property detail and on add-listing, where
+  it is shown BEFORE navigating away (navigating first would unmount the
+  reveal, which is how the award went unseen). **Not a spin wheel**: the points
+  are decided server-side before the response arrives, so the animation is
+  theatre over a settled number — the component doc says so, and is the one
+  place to change if that judgement is revisited.
+
+**W4 — owner parity.**
+
+- **F13** — added `area.superBuiltUpSqft`, `area.plotSqft`, `availableFrom`,
+  the three `legal.*` compliance booleans and `address.nearby`, all verified
+  against both the add whitelist and the schema. `area.pricePerSqft` is
+  **derived** from price and area rather than asked for, the way the website
+  derives it, and deliberately not read back on edit so it cannot go stale
+  against a changed price. The legal booleans are sent only when true: an
+  unticked box means "not stated", not "does not have one". `latitude` and
+  `longitude` still wait on the map/dev-client rebuild; `videoUrl` stays out.
+- **F14** — the close-deal outcome is derived from `listingType` and shown
+  read-only, so an owner can no longer mark a sale listing "rented". The
+  website's dead-end case (a listing type matching neither, which its own modal
+  blocks with no selector to satisfy) gets a sane answer here.
+- **The 15 MB file cap was NOT added**, deliberately. Every picked photo goes
+  through `compress` (1600px, JPEG 0.7), which lands far under both the
+  website's 15 MB and the backend's 10 MB, so the check could never fire. The
+  reasoning is recorded at the call site; if arbitrary file upload is ever
+  added, the cap has to come with it.
+
+**W5 — content and rails.**
+
+- **Collections rails mounted**, but three of fifteen, not all. `/properties/search`
+  allows 20 requests per minute per IP and Home already spends three; fifteen
+  more would put a single scroll over budget and fail as a 429 on the next
+  screen. `HOME_COLLECTION_IDS` is the list and carries that reasoning; the
+  other twelve stay resolvable via `findCollection`.
+- **Blog** — `app/blog/index.tsx` and `app/blog/[slug].tsx`, on the real
+  `/blogs` endpoints (free-text param is `q`, addressed by **slug**, `related`
+  alongside `data`). Post content is HTML from the admin editor and is rendered
+  as **text**: block tags become paragraph breaks, the rest is stripped,
+  entities decoded with the existing helper. Faithful rendering needs a WebView
+  or an HTML renderer — a native module or a dependency for one screen. What is
+  lost is inline emphasis, links and embedded images.
+- **`app/support.tsx`** — one Help & about screen instead of the website's
+  seven content routes. Carries the FAQ (ported from the website, with the
+  redemption answer amended because the website's copy still describes a store
+  it no longer ships), support email and phone from the website footer, and
+  links out to About / Why DealDirect / Privacy / Terms.
+- **Privacy and Terms are links, not screens, on purpose.** Legal text needs
+  one source of truth: a copy baked into a shipped binary drifts silently and
+  cannot be corrected until the next release is adopted. The links are omitted
+  entirely when no `WEB_URL` is configured rather than built against a guessed
+  origin. **Press & impressions was not ported** — it targets journalists and
+  does not belong in a buyer's app.
+- Both new destinations are reachable from the Profile tab.
+
+**Still open, unchanged:** everything in §9.4's held/blocked list — group buy
+(D4), rewards redemption (D3), the map bundle, universal links, server push —
+plus the device pass and the deploy (§9.6).
+
+### 9.10 The UI pass (2026-08-13/14) — what changed and the rules that follow
+
+Chirag's brief: "except home page the complete app's UI/UX is shit." Correct,
+and the causes were structural rather than a matter of taste. Home had been
+redesigned; nothing else had, and four systemic faults made that gap look
+worse than it was.
+
+**The four root causes, all fixed.**
+
+1. **The app rendered in two typefaces.** `FontOverrideProvider` was mounted at
+   Home's root only, so Home was DM Sans and every other screen was the
+   platform system face. Moving between tabs looked like moving between two
+   products. The provider now sits in `app/_layout.tsx`. The trade is real and
+   recorded in `theme/fonts.ts`: system faces ship optical sizing that one
+   bundled webfont does not, and we take that hit to make the app look like
+   itself.
+2. **`global.css` and `colors.ts` disagreed, and the CSS side won.**
+   `--color-background` and `--color-surface` were both bound to pure white,
+   while `colors.ts` had already dropped the page a step down the ramp and
+   written a long comment explaining why. `Screen` renders
+   `className="bg-background"`, so it read the CSS: every screen was a white
+   card on a white page, which is why cards needed borders and the app read as
+   an admin panel. Both files now bind `palette.canvas`, and `Card`'s
+   `bordered` default flipped to `false`.
+3. **Twenty screens hand-rolled the same header**, no two agreeing on padding,
+   title size, or the back button's fallback. Now one `ScreenHeader`. The
+   conversion is in `scripts/adopt-screen-header.mjs`, kept in the repo: it
+   rewrote 13 files mechanically and REPORTED the 7 variants (trailing
+   actions, close icons, floating discs) for hand-work rather than mangling
+   them.
+4. **Headers padded at 20 while content padded at 16.** On nearly every screen
+   the title sat 4pt outside the content beneath it, and several screens padded
+   their skeleton at 20 and their loaded list at 16 — so content jumped
+   sideways the moment data arrived. `screenPadding` is now a token and
+   everything reads it.
+
+**New primitives** (`src/ui/`): `ScreenHeader` + `HeaderAction`;
+`ListGroup`/`ListRow`/`SectionLabel` (the grouped list, with separators inset
+to the row's text — the detail that most separates a native list from a web
+one); `Stat`/`StatRow`/`ProgressBar`/`Segmented` (each of which previously
+existed twice under two names); and `Toast`.
+
+**Toast matters more than it looks.** The app had no non-blocking notification
+surface, so every "saved", "removed" and "sent" was an `Alert.alert` — a modal
+with a button, to confirm the thing the user just asked for. Eleven screens did
+this. `Alert.alert` stays for destructive confirmations and errors that must be
+acknowledged; everything else should move to `useToast()`.
+
+**Two real bugs found while in there.** `Button`'s disabled state never
+rendered — its animated `style` returned `opacity: 1` unconditionally and
+merges after NativeWind's compiled classes, silently overriding `opacity-50`,
+so every disabled button in the app looked enabled. And `Card`'s press
+feedback dimmed, which is the language of *disabled*; it springs now, like
+everything else.
+
+**Rules that follow, for anyone adding a screen:**
+
+- Never hand-roll a header. `ScreenHeader`, always, and pass `backTo` — a
+  screen entered by deep link has no history and `router.back()` strands the
+  user.
+- Never hard-code a horizontal page margin. `screenPadding`. The skeleton and
+  the loaded content must use the same one.
+- A list of options is `ListGroup` + `ListRow`, not a `Card` with hand-built
+  rows and full-bleed separators.
+- Press feedback is scale (`PressableScale`), never opacity. Opacity means
+  disabled.
+- A tab screen uses `edges={['top']}` — `TabBar` already pays the bottom
+  inset, and the default `['top','bottom']` pays it twice.
+- Confirmations are toasts. Modals are for questions.
+
+**The auth screens and the alert sweep — done 2026-08-14.**
+
+*Auth.* All five screens now share `AuthShell` (`src/auth/components/`). What
+it fixed: four centred their content and register did not, so the title jumped
+vertically between screens; all five padded at 24 against the app's 16; and
+each carried a different way back (a ghost Button, a bare Pressable, nothing).
+Centring is now a prop rather than a habit — `center={false}` on register and
+reset-password, because `justifyContent: 'center'` on a scroll view whose
+content exceeds the viewport clips the TOP, putting the title out of reach.
+
+Their four bespoke terminal states ("Code sent", "Password updated", "Session
+expired", "Missing details") were `EmptyState`'s layout hand-written four
+times with three different spacings. They are now `AuthResult`, which adds the
+thing all four lacked: an icon, so success and failure no longer render
+identically apart from their words. `EmptyState` gained one prop
+(`actionVariant`) so its action can be primary when it *is* the screen.
+
+*Alerts.* Thirteen down to eight, and the eight that remain are correct. The
+rule applied: **a modal is for a question, a toast is for an answer.** Every
+surviving `Alert.alert` is a destructive confirmation ("Delete listing",
+"Leave this group buy?", "Log out") or a real question ("Resume draft?"), and
+each now fires a toast on completion rather than leaving the user to infer it
+worked. Converted to toasts: the close-deal submission notice, the OTP resend
+confirmation, the photo-permission explanation, and the invalid-video error.
+
+One deliberate exception, documented at the call site: "Cannot place calls"
+stays a modal because it carries the number the user must now dial by hand,
+and a toast that vanishes in 2.6 seconds is not long enough to read and
+transcribe ten digits.
+
+**The off-centre button — a one-line cause with an app-wide effect (2026-08-14).**
+
+Reported as "the sign-in button is shifted right, not centred". The cause was
+`Button` hard-coding `self-start` whenever `fullWidth` was false, with no way
+to override it. **`alignSelf` beats the parent's `alignItems`**, so every
+button inside a centred container was dragged to the leading edge —
+`EmptyState`'s action, `ErrorState`'s retry, and every guest gate in the app.
+Those are the most-seen screens for a signed-out user, and all of them looked
+broken.
+
+`Button` now takes an `align` prop. `start` remains the default, because a
+button with no alignment inherits RN's `alignItems: 'stretch'` and grows to
+fill its row, which is worse — but it is a default now rather than a decree,
+and `EmptyState`/`ErrorState` pass `center`.
+
+**Guest gates, rebuilt as `SignInPrompt` (`src/auth/components/`).** Six
+screens rendered a bare `EmptyState` with one button, and they shared two
+faults beyond the alignment bug:
+
+- **They offered no way to create an account.** A brand-new user — the person
+  most likely to be looking at a signed-out screen — could only "Sign in".
+  They had to find that screen, read it, and notice the create-account link at
+  the bottom. `SignInPrompt` offers both paths.
+- **They were undifferentiated**: identical title-over-button on all six,
+  which reads as a wall rather than an invitation. Each now carries a tinted
+  icon well naming what is behind the gate, and the title names the *thing*
+  ("Your rewards") rather than the act ("Sign in to see your rewards").
+
+**Also swept:** the last three off-token greys (`#9AA0A6`, `#94a3b8`) replaced
+with `theme.colors.textMuted`; and two project rows that wrapped a `Card` in a
+bare `Pressable` with no `style` callback — they acknowledged a touch with
+nothing at all, and now use `Card`'s own springing `onPress`.
+
+**Still outstanding:** `chat/[conversationId]` keeps a hand-rolled header with
+a magic `HEADER_HEIGHT = 56` keyboard offset — left alone deliberately, since
+chat is unmounted (§9.1 D2) and touching an unreachable screen's layout is
+work with no way to verify it.
+
+### 9.11 The five-surface redesign (2026-08-14) — references and decisions
+
+Chirag asked for premium real-estate app references and five surfaces built
+against them. The references, and what was taken from each:
+
+| Source | What it settled |
+|---|---|
+| [UX Planet — bottom tab bar practices](https://uxplanet.org/bottom-tab-bar-design-best-practices-ef3ee71de0fc) | 3–5 destinations max; ~49pt bar; min 3:1 contrast; no scrollable bar; standard icons only if going icon-only |
+| [Mobbin — real estate](https://mobbin.com/explore/mobile/app-categories/real-estate) and [tab bar](https://mobbin.com/explore/mobile/ui-elements/tab-bar) | Shipped patterns rather than concept work; floating/curved docks as the emerging convention |
+| [Airbnb design notes](https://github.com/VoltAgent/awesome-design-md/blob/main/design-md/airbnb/DESIGN.md) | 14px property-card radius; fixed card aspect with column count changing, never reflowing rows |
+| [Zillow/Redfin patterns](https://www.designmonks.co/blog/real-estate-website-ux-design-examples) | Progressive filtering — location and price first, then the rest; results update instantly |
+| [Real estate UI trends 2026](https://techlancersme.com/blogs/ui-ux-design-tips-for-real-estate-apps-2026/) | Sticky thumb-reachable CTAs; restraint over density |
+
+**1. The dock (`ui/TabBar.tsx`) — a floating pill.** The old bar was
+edge-to-edge on a hairline with four icons, four labels and a 2pt rule under
+the active one: legible, and completely forgettable. It floats now, so content
+scrolls visibly beneath it and it becomes an object with a shape that can
+carry a shadow.
+
+The active tab **expands** to show its label; the others are icon-only. Four
+permanent labels at 11pt is four pieces of text competing, and "Properties"
+either truncates or drags every other label smaller with it. Showing the label
+only for the current tab also produces the strongest possible active state —
+the selected tab is a different SHAPE, which survives low contrast and colour
+blindness in a way a colour swap does not. The trade is named in the file:
+this is only acceptable because the four glyphs are home, magnifier, heart and
+person. A domain-specific icon would need its label back.
+
+Post stays in the dock, against the "destinations only" rule, and the file
+says so. Posting is the single thing an owner opens this app to do; the rule
+costs more than it is worth here. It is marked as an action by being the only
+filled circular element and never taking the selected state.
+
+**2. Search → Properties (`app/(tabs)/properties.tsx`).** Renamed because the
+old name described the ACT rather than the destination — three nouns and a
+verb in one tab bar — and because arriving from Home's "View all" lands here
+with no query at all, which is not searching. Three rows of chrome (filters,
+result count, intent chips) collapsed into one scrolling control strip plus a
+result bar that only exists once there is a result. Added a **density toggle**:
+cards when the photo is deciding for you, compact rows when price and size
+are what you are comparing. That toggle is also the cheapest accessibility win
+on the screen — the compact row fits roughly 3× as many results, which matters
+most to users on large text who see fewest.
+
+**3. Property card.** Now a real surface card at radius 14, which only became
+possible when the page background moved to `canvas` (§9.10). The old file
+argued *against* a container and was right at the time; that reasoning is kept
+rather than deleted, because it says what to revisit if the background ever
+goes back up the ramp. **Still no heart** — saving here creates a Lead, emails
+the owner and is capped at five, so a heart would promise private, free and
+unlimited and be none of them.
+
+**4. Profile.** Rebuilt as the app's only complete index. Home shows
+discovery, the dock shows four tabs, and everything else is reachable from
+here or nowhere — so the test for this list is coverage, not brevity. Three
+groups (yours / the product / your account), then log out alone at the bottom.
+
+**5. Saved and My Properties.** Saved's interest cap became a **meter** rather
+than a sentence: "3 of 5 used" states the limit, a filled bar shows how close
+the wall is, and it turns danger-toned at the cap where it stops being
+information and starts being the reason the next tap will fail. My Properties
+gained the two numbers an owner actually opens it for — enquiries and views,
+enquiries first because a view is attention and an enquiry is a person — and
+Delete moved out of the primary row, where it had been an equal-width danger
+button a thumb-width from Edit.
+
+**New tokens:** `brandMuted` (a tinted brand fill for selected states that
+must not read as alerts) and `tabBarClearance` (the floating dock means no
+scroll view can rely on its own bounds any more).
+
+**6. Home rails and property detail (same pass).**
+
+*Rails.* `PropertyRailCard` and `ProjectCard` both drew a hairline border and
+no shadow, while the new browse card draws a shadow and no border — the same
+object built two ways depending on which screen it appeared on. Both moved to
+the shadow. The rail card's original note argued for the border and was right
+when the page was near-white; that reasoning is preserved rather than deleted,
+because it records what to revisit if the background moves back up the ramp.
+
+`Section` padded its heading at 20 while `Rail` padded its cards at 16, so
+every section title on Home sat 4pt outside the first card it introduced. Both
+read `screenPadding` now. Its "View all" was bare coloured text with a chevron
+— which reads as part of the heading rather than as a control, and painted
+about 18pt tall against a 44pt minimum. It is a tinted pill with a real edge
+and a real target.
+
+*Property detail.* The intent chip moved above the price rather than beside
+it. "For rent" and "₹45,000" on one line makes the eye choose between them at
+equal height; stacked, the chip is read first, which is what tells you whether
+the number below is monthly or a purchase price — the difference between a
+₹45,000 flat and a ₹45,000 mistake. Section headings gained a rule above them:
+the page runs to several thousand pixels of one neutral colour, so the
+headings are the only structure the eye has, and `title3` alone was doing that
+at the same weight as a card title three lines up.
+
+The sticky action bar gained an **upward** shadow. A hairline alone says "the
+page ends here"; the shadow is what makes the last attribute row read as
+passing *under* the bar rather than being cut off by it.
+
+**7. The heart is gone from Home's rails — Chirag's decision, 2026-08-14.**
+
+`PropertyRailCard` used to render a heart when the caller passed
+`onToggleSave`, and Home passed it. A tap there created a Lead, emailed the
+owner, handed over the user's name, email and phone, and silently spent one of
+five enquiries — from a thumb brushing the corner of a photo, on the app's
+busiest screen.
+
+Removed end to end rather than hidden: the control and both props are out of
+`PropertyRailCard`, the pass-through props are out of `PropertyRail`, and Home
+no longer reads the interest list at all. `useSavedIds` — the hook that existed
+solely to drive it — was deleted with them, since leaving 60 lines of working
+toggle logic behind is an invitation to re-mount the control. Nothing lost
+capability: the Saved screen uses `useSavedProperties` + `useRemoveInterest`,
+and property detail uses `useInterest`.
+
+**Every surface now offers this action the same way**: a labelled button with
+a consequence line under it, on the detail screen where there is room for that
+sentence. That last part is the real argument, and it is recorded at the top of
+`PropertyRailCard` so the next person to reach for a heart on a property card
+finds out why there isn't one: *a rail card has no room to say what the action
+does.*
+
+### 9.8 Documentation discipline
+
+- **This file is the plan of record.** `HANDOFF_AUDIT_2026-08-09.md` stays
+  authoritative for the auth details it documents. `API_CONTRACT.md` is the
+  wire truth. `MOBILE_APP_ARCHITECTURE_PLAN.md` is historical design context
+  only (it now carries a banner saying so); do not scope work from it.
+- Every backend claim in any doc states which backend: `origin/main` (live),
+  `HEAD`, or working tree.
+- The website's `client-next/src/utils/api.js` is partly dead code. Parity
+  work reads page components, never that file. If a helper and a page
+  disagree, the page ships; if both disagree with the controller, the
+  controller wins.
+
+---
+
+## 10. 2026-08-14 — The portal-parity UI pass
+
+Scope: `dealdirect-mobile` only. Nothing in `backend/`, `client-next/` or
+`Admin/` was touched, and no endpoint, param or model changed. Every figure the
+new UI shows is either a field already on the row or arithmetic over two of
+them.
+
+### 10.1 What was measured, and how
+
+Housing.com, Square Yards and 99acres were opened in a 375×812 viewport and
+read through the DOM: computed styles, sticky/fixed element geometry, card
+subtree structure, type scale and radius histograms. MagicBricks is blocked by
+browsing policy and was not read. NoBroker serves a no-JS shell to that browser,
+so only its filter taxonomy came through — which was the useful part.
+
+The findings that drove the work:
+
+| | Housing | Square Yards | 99acres |
+|---|---|---|---|
+| Sticky pill rail on results | search + bottom nav | Filters · Sort, 52pt | **Sort · Owner · Budget · BHK · Type · Verified · Ready**, 53pt |
+| Photo count on card | yes | dark pill, r7, bottom-left | yes |
+| ₹/sqft on card | yes | in attribute grid | `₹34,992 /sqyd` |
+| Attribute presentation | — | icon + label + value grid | labelled key-facts row |
+| Social proof | — | — | "3 people already contacted since last week" |
+| Detail sticky CTA | — | 72pt, WhatsApp + Call Back | 54pt, WhatsApp + View Number |
+| Detail section nav | — | **yes**, 14 jump links | — |
+| Similar rail on detail | — | yes | two of them |
+| Research tools on home | **6 calculators** | — | — |
+
+Brand values for reference: Housing `#5E23DC` / Rubik / radii 8·5·10·24;
+99acres `#0056B8` / Inter / pills at 1000px; Square Yards Arial / 8px cards,
+100px pills.
+
+### 10.2 What changed
+
+**Search results** (`app/(tabs)/properties.tsx`, `features/search`)
+
+- `QuickFilterBar` — the 99acres pill rail. Filters, a compact `Segmented` for
+  rent/sale, then facet pills for Sort, Budget, Rooms, Type, Furnishing, and a
+  direct possession toggle. A pill shows its facet NAME unset and its VALUE set.
+- `FacetSheet` — one facet, applied on tap, no Apply button. `FilterSheet` keeps
+  its draft-and-commit model; the note at the top of `FacetSheet` says why the
+  two differ rather than one wrapping the other.
+- **BHK is a filter for the first time.** Client-only, reconciling the string
+  `bhk` and numeric `bedrooms` fields; `'4'` is an open 4-and-up bucket. `1 RK`
+  is matched before the digit scan, or the `1` in it reads as a 1 BHK.
+- The result count moved into the list as its header, so it scrolls. Fixed
+  chrome is still two rows after gaining six facets.
+- The rail is NOT inside the screen's horizontal padding, deliberately — a
+  horizontal scroll view inside one is clipped short of both edges.
+- `priceBand` is now an accepted route param, validated against the table.
+
+**Listing card** (`features/properties/components/PropertyCard.tsx`)
+
+Photo count over the image, ₹/sqft beside the price, an icon fact row replacing
+the dot-joined grey spec line, and a "Posted 3 days ago · 142 views" line. Both
+densities. `formatRatePerSqft` returns null far more often than it returns a
+string — read its guards before loosening them; a wrong rate costs more than a
+missing one.
+
+**Property detail** (`app/property/[id]/index.tsx`)
+
+- ₹/sqft under the price, the provenance line under the facts strip.
+- `DetailSectionNav` — Square Yards' jump strip. Sections MEASURE themselves in
+  through `SectionRegistryContext`; a declared list would scroll people to
+  nothing on the many listings that omit a section. Shares the header's
+  collapse interpolation via the new exported `useHeaderProgress`.
+- A "Similar properties" rail, with its own scorer in `search/related.ts`. It
+  shares the search rail's pool query and key, so a user who searches and then
+  opens a listing pays for one fetch.
+
+**Home** (`app/(tabs)/index.tsx`, new `features/tools`)
+
+Housing's research-tools section, at two calculators rather than six. The
+affordability one models both ceilings Indian lenders apply — FOIR on income and
+the LTV cap on the deposit — reports which one bound the answer, and ends in a
+search rather than a figure.
+
+### 10.3 What was deliberately NOT copied
+
+- **Verified / RERA badges** (99acres, Square Yards). The backend has no
+  verification state for a listing. An unearned trust badge is worse than none.
+  It goes in the day the field does.
+- **Locality reviews, price insights, commute time** (99acres, Square Yards).
+  No data, and the last needs the map phase that is still held on a dev-client
+  rebuild (§5.1).
+- **Eligibility, Valuation, Rent Value, Area calculators** (Housing). Three need
+  a model or data we do not have; Eligibility is Affordability backwards.
+- **A heart on the card.** Unchanged and still correct — see §9.7.
+
+### 10.4 Verification status
+
+`tsc --noEmit` and `eslint` are clean across the app; the 14 remaining warnings
+all predate this work. **Nothing here has been seen running.** There is no test
+runner in this package and no web target (`react-native-web` is not installed),
+so a device or emulator pass is the first thing the next session should do.
+Highest-risk items to look at first, in order:
+
+1. `DetailSectionNav` — offset measurement, the jump landing point, and that it
+   does not eat taps meant for the hero while transparent.
+2. `FacetSheet` heights — derived from an 812pt reference, so a small phone will
+   scroll where a large one will not.
+3. The quick-filter rail's width on a small screen, and that the segmented
+   control does not squash.
+
+### 10.5 Second pass — Saved and Profile (same day)
+
+Their shortlist and account surfaces are login-gated on all three portals, so
+this pass had no reference to measure against and is not parity work. It is
+what going through the two screens carefully turned up.
+
+**Three defects, all previously invisible:**
+
+1. **Tapping a saved search did nothing.** `run()` pushed `{ city }`, a param
+   `app/(tabs)/properties.tsx` has never read, and that screen returns early
+   from its route effect when none of its known params are present. The tap
+   switched tab and left the previous search in place. Fixed by translating the
+   stored city STRING through `matchCity` into the `City.id` the results
+   filter is keyed by, with a free-text fallback for cities not in the table,
+   plus a new validated `city` route param. **The saved-search price band is
+   still deliberately not carried** — its three buckets do not line up with the
+   results screen's five, and running a subtly different search from the one
+   the alert watches would let a user draw false conclusions about their alert.
+2. **The Searches tab loaded behind `PropertyListSkeleton`** — three 300pt
+   property cards standing in for 90pt text rows, so the list collapsed upward
+   when data arrived. It has `SavedSearchListSkeleton` now.
+3. **Profile's signed-out header was missing `tight`**, so signing in shifted
+   the screen 12pt.
+
+**Two things mounted that already existed:**
+
+- `recentlyViewed.ts` has been complete since M12 and rendered nowhere; its own
+  docstring refers to a Home row that did not exist. It is now the first row on
+  Home and the **only one not wrapped in `Reveal`** — `Reveal` defers a
+  section's query, and this row makes no request, so there is nothing to defer.
+  Read that module before changing it: it stores a snapshot rather than ids
+  specifically because `GET /properties/:id` increments the view counter, and
+  refetching to draw the row would corrupt the one behavioural signal the
+  backend collects.
+- The two calculators are now in Profile's index, which documents itself as the
+  app's only complete index.
+
+**One structural change:** Profile's signed-out state was a full-height sign-in
+wall. Five of the eight destinations it indexes need no account — listings,
+projects, blog, both calculators, help — so a guest now gets a compact prompt
+and the public half of the index. Both branches render the same
+`PublicSections`, so a route added there cannot appear for one kind of user and
+not the other. `SignInPrompt` gained a `compact` prop for this; the other five
+screens that use it have genuinely nothing to show a guest and keep the
+full-height default.
+
+### 10.6 Text fields — a real clipping bug, and phone entry
+
+**Reported:** text cut off along the bottom on login and register.
+
+**Cause, and it was app-wide rather than screen-specific.** `Input` and
+`SearchBar` styled their `TextInput` with `text-body` — the NativeWind class
+every paragraph uses. That class is a SET: size, tracking, weight and **line
+height**. React Native honours a `lineHeight` on a `TextInput` by laying the
+text out in a box of exactly that height and does NOT grow it for the font's
+own ascent and descent. `body` declares 16/24, DM Sans at 16pt needs more than
+24pt to clear its descenders, so `g y p j q` and the comma were sliced off
+everywhere those two components appeared. It is not fixable with padding — the
+clipping happens inside the line box.
+
+**Fix:** `src/ui/textInputStyle.ts`. One hook, used by all four `TextInput`s in
+the app (`Input`, `SearchBar`, `HeroSearchField`, `ChatComposer`), which
+previously held four different ideas of what an input's text looks like. It
+takes size, tracking and weight from a typography token and **deliberately
+omits `lineHeight`**. If you add one back, the bug comes back.
+
+Two things to know before touching that file:
+
+- **`includeFontPadding` is left alone on purpose.** The usual advice for
+  tightening Android text is to disable it. That is exactly backwards here:
+  that padding is derived from the font's ascent and descent and is what stops
+  descenders being clipped. Turning it off is a known way to cause this bug.
+- It also sets `fontFamily`, which fixed a second bug nobody had reported.
+  `FontOverrideProvider` is a context `ui/Text.tsx` reads, and a `TextInput` is
+  not a `Text` — so every field in the app rendered in the platform system face
+  while every label around it rendered in DM Sans. That is the one place the
+  app-wide typeface decision in `theme/fonts.ts` had never reached, and it
+  compounded the clipping, since the declared 24pt box was being measured
+  against whichever face happened to render.
+
+**Phone entry.** Register always had a mobile field. It now shows `+91` as a
+fixed prefix that is never sent — the backend validates `/^[6-9]\d{9}$/`, ten
+digits and no country code, and without the prefix a user has to guess between
+`9876543210`, `09876543210` and `+919876543210`, two of which that regex
+rejects without explaining itself. `normalizeIndianMobile` (beside
+`phoneSchema`, since the two encode the same fact from opposite ends) reduces a
+pasted number to those ten digits instead of failing it for its formatting.
+Forgot-password uses the same helper and prefix. `Input` gained a `prefix` prop
+for this, separated by a hairline so the fixed part reads as fixed.
+
+**Open, and NOT a mobile-app change: login accepts email only.**
+`userController.loginUser` does `User.findOne({ email: normalizedEmail })` and
+there is no phone-login route — lines 683 and 802 look users up by phone, but
+those are the reset flows. Chirag's call on 2026-08-14 was to leave login
+email-only for now; forgot-password is the phone-based route into an account.
+Adding mobile login means extending `loginUser` first, then a single
+accepts-either field on the login screen.
+
+### 10.7 Motion audit
+
+Audited against the eight-category bar (purpose/frequency, easing/duration,
+physicality, interruptibility, performance, accessibility, cohesion, missed
+opportunities). **The result was short, and that is the finding**: the motion
+system in `theme/motion.ts` is genuinely good — tokens describe BEHAVIOUR
+rather than fixed timings, anything touchable gets a spring, and reduced-motion
+substitution is defined centrally. `PressableScale`, `Sheet`, `ExpandableText`,
+`DetailHero` and `Image` were all checked and left alone.
+
+Four things changed:
+
+| Location | Was | Now |
+|---|---|---|
+| `DetailSectionNav` | slides `translateY -8 → 0`, and scrolls its rail sideways, with no reduced-motion gate | fade only under reduce-motion; rail jumps rather than glides |
+| `ui/Toast.tsx` | `FadeInDown` / `FadeOutDown`, ungated | plain fade under reduce-motion |
+| `ui/Metrics.tsx` `ProgressBar` | `width: '${pct}%'`, teleports | springs on `scaleX` with `transformOrigin: left` |
+| `tools/affordability`, `tools/emi` | result card popped into existence | rises once on mount |
+
+Two of those are the same bug — a component animating movement without reading
+the OS setting, when eight others in the app already do. `DetailSectionNav` was
+added earlier the same day and simply missed it.
+
+**`ProgressBar` is the one worth reading before changing.** It animates
+`scaleX` rather than `width` deliberately: width re-runs layout every frame on
+the main thread, a transform composites on the UI thread for free. The fill is
+laid out at full width once and scaled down, origin pinned left. It springs
+rather than times because the value can change again mid-flight (removing two
+interests in a row on the Saved screen), and `spring.standard` is critically
+damped because a progress bar that overshoots is briefly showing a number that
+is not true.
+
+**Deliberately NOT animated**, so nobody adds it later thinking it was missed:
+
+- **Quick-filter pills and the segmented control.** Hit tens of times a day.
+  The playbook's own rule for that frequency is remove or reduce, not add.
+- **Search-result rows.** Entrance animations on a virtualised infinite list
+  fire on every scroll-in, which is motion the user did not ask for, repeatedly.
+- **The card/row density swap.** It teleports, and animating a FlashList
+  re-layout costs more than the jump does.
+- **Screen transitions.** Expo Router's native stack already provides the
+  platform animation; overriding it would make the app feel non-native.
+- **Input focus borders.** Feedback on a direct manipulation should be
+  immediate, not eased.
+
+**Unverified by eye.** As with the rest of §10, none of this has been seen
+running. Feel-check on a device: the progress bar under a rapid double-remove
+on Saved (it should retarget, not restart), and the tools card entrance while
+editing an input (it must NOT re-enter on each keystroke).
+
+---
+
+### 10.8 The navigator's own background was light in dark mode
+
+Reported from a device: on Saved and Properties in dark mode, a pale band sat
+along the bottom edge under the floating dock. It was on every screen with a
+tab bar, not those two.
+
+**Cause.** React Navigation paints a background behind every navigator, taken
+from `theme.colors.background`. Expo Router mounts its `NavigationContainer`
+with `DefaultTheme` and never consults the colour scheme, so that value was
+`rgb(242, 242, 242)` in both schemes, always.
+
+Nothing showed it while a screen covered it — `ui/Screen` paints
+`bg-background` across the whole scene. But the tab bar is a SIBLING of the
+scene rather than a child: `BottomTabView` lays the screen container and the
+tab bar out in a column. Our dock is a floating pill (§ `ui/TabBar.tsx`) with
+transparent 16pt gutters and a transparent safe-area strip beneath it, so every
+transparent pixel around the pill was showing that grey through a black app.
+The pill's shadow (radius 20) darkened the gutters enough to hide it there,
+which is why it read as a band along the bottom rather than as a frame.
+
+**Fix.** `src/theme/navigationTheme.ts` projects our colour tokens into React
+Navigation's theme shape for both schemes, and `app/_layout.tsx` wraps the
+`Stack` in `ThemeProvider` from `@react-navigation/native`. That also corrects
+the native stack's scene background and the modal backdrop, which were reading
+the same wrong value.
+
+`@react-navigation/native` is imported directly and is deliberately NOT added
+to `package.json`. It arrives as a dependency of `expo-router`, which owns its
+version; declaring it separately would let the two drift.
+
+**Status bar.** `style="auto"` reads the OS appearance, not the app's resolved
+scheme, so forcing Dark on a Light phone gave black glyphs on a black header.
+Both remaining `auto` uses are now driven from `theme.scheme` — the root layout
+and `DetailHeader`'s collapsed state. `gallery.tsx` and `DetailHeader`'s
+expanded state stay hard-forced to `light`: those sit on a photograph, where
+the scheme is irrelevant.
+
+**Not covered.** Android's system navigation bar under `edgeToEdgeEnabled`.
+Setting its button colour needs `expo-navigation-bar`, which is not installed;
+that is a native-module decision, not part of this fix.
+
+### 10.9 Theme switch on Profile
+
+`Appearance` group at the foot of `PublicSections` in `app/(tabs)/profile.tsx`:
+a three-option segmented control, System / Light / Dark, on
+`useThemePreference()`. The runtime already existed and persisted to MMKV; the
+only surface exposing it was the dev-only gallery, so a shipped build had no
+way to reach it.
+
+Three decisions worth keeping:
+
+- **In `PublicSections`, so signed-out users get it too.** A colour scheme is a
+  device preference, not account data — `ThemeProvider` already persists it
+  across logout for that reason.
+- **Three options, not a switch.** A two-state toggle cannot express "follow
+  the phone", so picking either would silently opt the user out of their
+  phone's schedule with no way back.
+- **Inside a `ListGroup`.** `Segmented` draws its track in `surfaceMuted`,
+  which is within 2% of the page background in light mode and would vanish on
+  it; on a card it separates.
+
+---
+
+### 10.10 A function-valued `style` is silently discarded — read this before writing one
+
+The single highest-value finding in this pass, because it fails quietly and it
+had already shipped in several places.
+
+React Native lets a `Pressable` take `style={({ pressed }) => …}`. **This app
+cannot use that form.** `babel.config.js` sets NativeWind's `jsxImportSource`,
+which routes every JSX element through `react-native-css-interop`'s `wrapJSX`;
+that swaps `Pressable` for its interop component whether or not the element has
+a `className`. The interop treats `style` as a source of inline CSS rules: it
+spreads it (`{...style}` — for a function, `{}`), assigns the empty object over
+`props.style`, and renders `{...props, ...computed}` with the computed value
+last. The function is never called.
+
+What that cost, in ascending order of visibility:
+
+| Where | What was lost |
+|---|---|
+| ~20 sites carrying layout in `className` | the pressed fade only — invisible in a screenshot, but every press in the app was unacknowledged |
+| `home/IntentCards` | the two hero cards' background tint and corner radius |
+| `home/HeroSearchField` rows | all layout: row direction and padding |
+| `search/QuickFilterBar` `Pill` | **everything** — padding, border, fill, pill radius, and `flexDirection`, which fell back to `column` |
+
+That last row is what "the filters at the top of the Properties page are not
+properly placed" was. Each pill painted as a bare `View`, so every chevron
+stacked under its own label and the whole rail read as loose text.
+
+**The rule.** Layout goes in a plain style OBJECT or in `className`. The press
+state goes in an `active:` class, or use `ui/PressableScale`, which takes an
+object and is the app's standard press treatment anyway. `eslint.config.js`
+now fails the build on a function-valued `style` in any `app/**` or `src/**`
+`.tsx`, with the explanation attached to the rule.
+
+All 26 sites were converted. Nothing else in the app uses the form.
+
+### 10.11 Properties opened blank, and the rail was rebalanced
+
+**Blank on arrival.** Reported as "no properties visible on the All filter". On
+a fresh install the tab rendered the search field, the filter rail, and nothing
+else. It started in `editing` with an empty field, which renders the
+recent-searches panel, and that panel returns `null` when there is no history —
+true for every first visit.
+
+Fixed in two moves, and the second is what retires the class of bug:
+
+1. The tab opens in results mode. `/properties/search` with no criteria returns
+   the whole corpus, so browsing everything is a real answer. The `browsing`
+   flag that used to distinguish "no criteria on purpose" from "no criteria by
+   accident" is gone, along with `StartPrompt`, because the accidental state is
+   no longer reachable. `clear()` now lands on the unfiltered corpus too.
+2. Editing mode only COVERS the screen when the panel has something in it —
+   suggestions for what is typed, or a history to offer. Focusing an empty
+   field with no history leaves the results visible behind it.
+
+**The rail.** Filters moved off it and now sits beside the search field, as a
+pill carrying the active count. It opens a surface rather than setting a value
+— the module doc always said so — and moving it returned 93pt to a strip that
+had eight controls competing for 393pt. The right edge now fades into the page
+background instead of chopping, so the pill under it reads as continuing rather
+than as broken. The rail still scrolls; eight legible controls will not fit
+across a phone and no arrangement of them will.
+
+### 10.12 Saved — the empty and signed-out states
+
+Both rendered one centred box and nothing else, on the same premise Profile was
+corrected for in §10.5: that a screen about saved things has nothing for a user
+with none. It is false. Recently viewed is device-local, so a guest has one; it
+costs no request, because `recentlyViewed.ts` replays a disk snapshot rather
+than refetching (which would inflate every listing's view counter); and with
+enquiring capped at five and emailing the owner, the listing someone returns
+for is far more often one they merely opened.
+
+So `NothingSavedYet` wraps both branches: the prompt goes `compact` at the top
+of a scroll with the recently-viewed rail under it, and falls back to the old
+full-height centred prompt when the history is empty too. `EmptyState` gained
+the `compact` prop `SignInPrompt` already had, for the same reason and with the
+same meaning.
+
+---
+
+## 11. 2026-08-15 — The card system rebuild
+
+Brief: the property cards, saved-property interactions, list/grid layout,
+spacing and button placement "feel amateur and visually inconsistent". Keep the
+light minimal language; fix the structure. Reviewed against `ios-visual`,
+`ux-foundations` and `interaction-design`.
+
+### 11.1 What was structurally wrong
+
+Not styling. Four architectural facts produced every symptom:
+
+1. **`Card` had no padding.** Of 49 `<Card>`s in the app, 41 supplied none, so
+   their content sat flush against all four edges. The Profile header was the
+   clearest casualty — avatar against the corner, and the rewards card touching
+   it with no gap.
+2. **The compact row was the feed card at a smaller size.** A fixed 108pt
+   square thumbnail inside a text-sized row meant image height and row height
+   varied independently down the list; 108pt was 29% of a 375pt screen and 25%
+   of a 430pt one; the intent chip was absolutely positioned over the *text*
+   column where it cost a line; the photo count sat in the opposite corner from
+   the feed card's.
+3. **The three cards shared no parts.** Each redeclared its own photo
+   container, badge and count chip at different sizes and insets. That is why
+   the list and the feed read as two apps.
+4. **The Saved screen's Remove was a sibling of the card, not part of it.**
+
+### 11.2 The component set
+
+| File | Responsibility |
+|---|---|
+| `properties/components/cardParts.tsx` | **new** — what a signal looks like, once: `Cover`, `IntentBadge`, `PhotoCount`, `SaveControl`, `CompareControl`, `SpecRow`, and the geometry constants |
+| `properties/components/PropertyCard.tsx` | rewritten — the feed card, 3:2 photo, four content groups |
+| `properties/components/PropertyListItem.tsx` | **new** — the compact row, purpose-built |
+| `properties/components/SavedPropertyCard.tsx` | **new** — four lines; `PropertyCard` with the heart wired to remove |
+| `properties/components/PropertyCardSkeleton.tsx` | rewritten — both shapes, derived from `cardParts` |
+| `search/components/ResultsToolbar.tsx` | **new** — count + save-search + compare + density |
+| `saved/components/EnquiryMeter.tsx` | **new** — the 4-of-5 counter as one object |
+
+`PropertyRow`, `COVER_HEIGHT`, `ROW_HEIGHT` and `PropertyCompareProps` are
+gone. `PropertyList` takes `getSaveProps` and `getCompareProps`.
+
+### 11.3 Geometry, stated once
+
+- **Cover is a RATIO (3:2), never a height.** A fixed 210pt cover was 1.72:1 on
+  a 375pt phone and 2.1:1 on a 430pt one. The compact thumbnail is a *share* of
+  row width (32%) at 1:1, and the row is `alignItems: 'stretch'` so the photo
+  takes the row's height rather than the row taking the photo's. That one word
+  is most of the list-view fix.
+- **Radius is a function of surface size**: `xl` (20) for a full-width card and
+  anything sitting in that column, `lg` (14) for a 96pt row. Content padding is
+  16 on both, which makes each inner box concentric with its outer radius.
+- **Overlay corners are assigned, not negotiated**: intent top-left, the one
+  action top-right, photo count bottom-right, bottom-left deliberately empty.
+  `OVERLAY_INSET` is 12 and `CONTROL_INSET` is *computed* from it — a 44pt
+  target around a 34pt disc has to sit 5pt closer to the edge for the two
+  visible objects to line up rather than the two boxes.
+- **The list owns the gap; no card carries a margin.** 16 between cards, 12
+  between rows.
+
+### 13.4 Save/unsave — the heart, and why it is honest now
+
+`features/properties/interest.ts` argued at length that a heart would be a lie
+on this backend: marking interest creates a `Lead`, emails the owner, hands over
+name/email/phone, and is capped at five. Every word still true.
+
+What changed is the resolution. Refusing the control did not make the
+consequence visible — it made the *action* invisible, and left the corner where
+every user looks for a save control occupied by a bare unlabelled circle (the
+compare checkbox). A discoverability failure traded for an honesty one.
+
+The control ships and the **confirmation** carries the truth: the toast says the
+owner can now contact you, states how many of the five remain, and carries an
+**Undo**. `ui/Toast.tsx` gained an optional action for this, and only becomes
+interactive when one is present.
+
+`useSaveToggle` (`features/saved/hooks.ts`) is the single implementation — one
+hook per screen, per-card props derived from it, membership read from the
+shared `useSavedProperties` query rather than one `check` request per card.
+Reading the cache *without* subscribing was tried first and was wrong: on a
+signed-in session that had not opened the Saved tab, every heart rendered empty
+including on already-enquired listings.
+
+Residue, stated rather than hidden: undo frees the slot and removes the user
+from the owner's interested list, but does **not** unsend the email or delete
+the `Lead`. That is why the toast says "can now contact you" rather than
+implying full reversal.
+
+### 11.5 The Saved screen's Remove
+
+Was: card, then a small red "⊗ Remove" in the gap **below** it, then the next
+card — putting the control nearer the listing it does not act on than the one it
+does. Norman's mapping, Cooper's "keep actions near the object they affect", and
+plain Gestalt proximity all say the same thing, and the layout violated all
+three identically. Worst case was not confusion; it was removing the wrong
+listing off a list capped at five.
+
+Now the filled heart on the card, with Undo. The `Alert.alert` confirmation went
+with it: a confirmation dialog is an admission that an action cannot be taken
+back, and four taps to remove one listing on the screen whose job is making room
+is the interaction cost of that admission. Undo is the same safety at a quarter
+of the cost and also covers the case the dialog never did — a mis-tap on the
+feed.
+
+### 11.6 Compare became a mode
+
+It was permanently on: an unlabelled circle over every photo in the feed for a
+feature most sessions never use. It is now behind the toolbar's Compare toggle,
+paid for with three simultaneous signals (filled toggle, checkboxes replace
+hearts, compare bar appears). Entering it forces card density, because the
+compact row has no free corner and a mode that is on with no visible effect is
+the worst kind.
+
+### 11.7 The dock
+
+The reported symptom was that the post button "competes with the navigation". It
+was not the button — it was that nothing distinguished it. The selected tab had
+a `brandMuted` pill with a brand-red icon and label, so the dock held two red
+objects side by side, one a destination and one an action. `colors.ts` already
+says which is which: brand is "not an action colour", accent is "the primary
+action colour". The selected tab now takes the accent, a hairline separates the
+four destinations from the one action, and red means exactly one thing in that
+bar.
+
+### 11.8 Unverified
+
+None of §11 has been seen running. Feel-check on a device, in order: the compact
+list's row heights (every row should now be identical); the heart's 44pt target
+against the card's own press target; the Undo toast's timing (5s) against how
+long it takes to notice one; and whether `Card`'s new default padding
+double-pads anywhere the grep for `p-*`/`px-*`/`py-*` classes missed.
+
+---
+
+## 12. 2026-08-15 — Production correction pass
+
+Device review of §11. Four real defects, one of them semantic.
+
+### 12.1 🔴 The heart was firing an irreversible disclosure, and calling it undoable
+
+**Audited against the controller**, not inferred. `markInterested`
+(`backend/controllers/propertyController.js:1505`), one tap:
+
+| Step | Effect |
+|---|---|
+| 1 | rejects if the user already holds 5 interests app-wide |
+| 2 | rejects their own listing, and duplicates |
+| 3 | pushes to `Property.interestedUsers`, `$inc likes` |
+| 4 | **creates a `Lead`** with a `userSnapshot`: name, email, phone, photo |
+| 5 | creates a `Notification` for the owner |
+| 6 | **sends the owner a WhatsApp** carrying name, email and phone |
+| 7 | awards reward points |
+
+`removeInterest` (`:1660`) reverses **step 3 only**. The lead, the
+notification, the WhatsApp and the points all survive. The quota IS restored,
+because the cap counts `interestedUsers` rather than leads.
+
+No email is sent. The claim in `features/properties/interest.ts` that this
+"notifies them by email" is wrong; it is an in-app document plus WhatsApp.
+
+So §11 shipped two lies at once: a heart icon promising a private, free,
+unlimited, reversible bookmark, and an "Undo" in the toast for an action that
+had already disclosed a phone number to a stranger.
+
+**Fixed without touching the backend.** `features/saved/saveToggle.ts` now
+raises `EnquirySheet` before an add — three lines stating what the owner
+receives, plus the quota — and the Undo is gone. Withdrawing is immediate,
+unconfirmed, and its toast says "Enquiry withdrawn" and nothing more, because
+offering Undo there would re-fire the notification and the WhatsApp, which is
+the opposite of undoing.
+
+A confirmation is normally the wrong answer. Three conditions make it right
+here and all three must hold or it should go back to one tap: the action is
+genuinely irreversible; the consequence cannot be inferred from the control;
+and it is rare (capped at five, so at most five sheets ever).
+
+**The product model the user wants is Save ≠ Enquire, and this backend cannot
+express it.** There is one array. `GET /properties/saved` reads the same
+`interestedUsers` that `POST /properties/interested/:id` writes.
+
+Minimum backend change, NOT made, awaiting a decision:
+
+- `User.savedProperties: [ObjectId]` (or a `SavedProperty` collection)
+- `POST/DELETE /properties/save/:id` — array write only, no lead, no
+  notification, no WhatsApp, no reward, **no cap**
+- `GET /properties/saved` split into `/saved` (the new bookmark) and
+  `/enquiries` (the existing interest list)
+
+UI change that would follow: the heart becomes the bookmark and loses the
+sheet; `Enquire` becomes a labelled button on the card and the detail screen;
+Saved gains a third segment or renames Interested to Enquiries.
+
+### 12.2 🔴 Cards touched because `gap` is inert under FlashList
+
+`contentContainerStyle={{ gap: 16 }}` did nothing. FlashList v2 positions every
+cell absolutely — its own `CellRendererComponent` documentation says `position`
+"will be `absolute` as that's how `FlashList` positions elements" — and flex
+`gap` has no effect on absolutely positioned children. `paddingHorizontal` and
+`paddingBottom` on the same object DO apply, which is what made it look like a
+value that was merely too small.
+
+`ItemSeparatorComponent` is the supported mechanism, is measured into the
+layout, and renders between items only — never above the first or below the
+last. 16 between cards, 12 between rows, matching header gaps via
+`ListHeaderComponentStyle`. No card carries a margin.
+
+### 12.3 🟠 Compare mode had no visible state at zero selected
+
+`CompareBar` returned null at zero items, so entering the mode gave a lit
+toolbar icon, checkboxes where the hearts were, and no explanation or exit. The
+bar now renders on the mode rather than the count, states what to do at zero,
+and always carries the way out. The toolbar toggle carries the count.
+
+### 12.4 🟠 The active filter pill was 2pt taller than its neighbours
+
+The label switched from `footnote` (13) to `subhead` (15) on selection, so a
+set pill stood taller and the rail lost its baseline. Fixed height, constant
+variant, weight and colour carry the state.
+
+### 12.5 🟠 Two hooks returned fresh objects, re-rendering every visible row
+
+`useSaveToggle` and `useCompareSelection` returned object literals, so the
+screens' `useCallback`-wrapped per-card prop builders changed identity on every
+render — including on every keystroke in the search field — which changed
+`renderItem` and re-rendered every visible row. Both memoised.
+
+### 12.6 Unverified
+
+Feel-check on device: the enquiry sheet at the largest accessibility text sizes
+on a 667pt screen (it does not scroll); the busy lock on a slow connection; and
+whether the 36pt filter pill needs its `hitSlop` widened on small phones.

@@ -95,9 +95,14 @@
  *
  * Bands rather than a range slider because one linear axis has to cover both
  * ₹8,000 rentals and ₹5 crore sales — a slider makes the entire rental range
- * about one pixel wide. The backend has no `listingType` param to split the two
- * populations, so the axis cannot be scoped. `RangeSlider` stays unused until
- * it can be.
+ * about one pixel wide.
+ *
+ * (Corrected 2026-08-13: this note used to say the backend had no
+ * `listingType` param, which stopped being true when `ab5ec1b` added one —
+ * `toSearchParams` sends it below. So the price axis CAN now be scoped to
+ * rent or sale, and a slider is worth revisiting. Note the param is committed
+ * but not yet deployed; against the live API it is ignored, so rent and sale
+ * results are currently unsplit in production regardless of what is sent.)
  *
  * Bands are inclusive at both ends server-side (`$gte` / `$lte`), so a listing
  * priced exactly on a boundary appears in both adjacent bands. Only one band is
@@ -149,7 +154,7 @@ export interface SearchFilters {
   sort: PropertySortOrder;
 
   /**
-   * The four fields below are CLIENT-ONLY. They are never sent as
+   * The five fields below are CLIENT-ONLY. They are never sent as
    * `/properties/search` query params — see the TAXONOMY/CITY/FURNISHING/
    * CONSTRUCTION STATUS block above for why. `toSearchParams` deliberately
    * ignores them; `hasClientOnlyFilters` is what tells the search hook to
@@ -163,6 +168,8 @@ export interface SearchFilters {
   furnishing?: string;
   /** Best-effort keyword match against free-text `constructionStatus`. */
   constructionStatus?: string;
+  /** `BhkOption.value` — `'0'` for 1 RK, `'1'`…`'3'` exact, `'4'` for 4 and up. */
+  bhk?: string;
 }
 
 export const DEFAULT_FILTERS: SearchFilters = {
@@ -179,6 +186,26 @@ export const SORT_OPTIONS: readonly { label: string; value: PropertySortOrder }[
 export function findPriceBand(id: string | undefined): PriceBand | undefined {
   if (!id) return undefined;
   return PRICE_BANDS.find((band) => band.id === id);
+}
+
+/**
+ * The band a given rupee amount falls in.
+ *
+ * Added for the affordability tool, which produces a budget and has to hand
+ * the results screen something it can filter by. Bands are inclusive at both
+ * ends (see the PRICE note above), so an amount exactly on a boundary matches
+ * the lower band — `find` returns the first, and the lower one is the honest
+ * answer for a budget: someone who can afford exactly ₹1 crore should be shown
+ * the range that ends there, not the one that starts there.
+ */
+export function bandForPrice(rupees: number): PriceBand | undefined {
+  if (!(rupees > 0)) return undefined;
+
+  return PRICE_BANDS.find(
+    (band) =>
+      (band.from === undefined || rupees >= band.from) &&
+      (band.to === undefined || rupees <= band.to)
+  );
 }
 
 /**
@@ -215,6 +242,7 @@ export function countActiveFilters(filters: SearchFilters): number {
   if (filters.categoryName) count += 1;
   if (filters.furnishing) count += 1;
   if (filters.constructionStatus) count += 1;
+  if (filters.bhk) count += 1;
   return count;
 }
 
@@ -240,6 +268,68 @@ export const CONSTRUCTION_STATUS_OPTIONS: readonly { label: string; value: strin
   { label: 'Under construction', value: 'construction' },
 ];
 
+/**
+ * Configuration, the facet every Indian property portal leads with.
+ *
+ * 99acres, NoBroker and Housing all put BHK in the first row of quick filters,
+ * ahead of budget on two of the three. We had no equivalent at all, so a buyer
+ * who wanted a 2 BHK had to type it into the free-text field and hope the regex
+ * caught it — which it does, against `title`, but only for listings whose title
+ * happens to spell it the same way.
+ *
+ * Client-only, and it has to be. `/properties/search` has no `bhk` or
+ * `bedrooms` param (see the accepted-params block at the top of this file), and
+ * the two fields it would read are inconsistent in the corpus: `bhk` is a
+ * string written by the add-listing form ("2 BHK", "5+ BHK", "1 RK") and
+ * `bedrooms` is a number that some rows carry instead. `bhkCount` below
+ * reconciles them into one integer so the filter does not have to care which
+ * one a given row used.
+ *
+ * `'4'` is a 4-AND-UP bucket rather than exactly four, matching what NoBroker's
+ * "4+ BHK" and Housing's "4+" chips mean. A user filtering for a large home is
+ * not excluding a five-bedroom one.
+ */
+export const BHK_OPTIONS: readonly { label: string; value: string }[] = [
+  { label: '1 RK', value: '0' },
+  { label: '1 BHK', value: '1' },
+  { label: '2 BHK', value: '2' },
+  { label: '3 BHK', value: '3' },
+  { label: '4+ BHK', value: '4' },
+];
+
+/**
+ * The listing's bedroom count as an integer, or null when it carries neither
+ * field.
+ *
+ * `bhk` is preferred over `bedrooms` because it is what the add-listing form
+ * writes and is present on more rows. "1 RK" is a real configuration in the
+ * data and means zero separate bedrooms, so it is matched before the digit
+ * scan — otherwise the `1` in "1 RK" reads as a 1 BHK, which is a different
+ * (and more expensive) thing.
+ */
+export function bhkCount(item: PropertySummary): number | null {
+  const raw = item.bhk?.trim();
+
+  if (raw) {
+    if (/\brk\b/i.test(raw)) return 0;
+    const digits = raw.match(/\d+/);
+    if (digits) return Number(digits[0]);
+  }
+
+  if (typeof item.bedrooms === 'number') return item.bedrooms;
+
+  return null;
+}
+
+function matchesBhk(item: PropertySummary, bucket: string): boolean {
+  const count = bhkCount(item);
+  if (count === null) return false;
+
+  const wanted = Number(bucket);
+  // The top bucket is open-ended; every other one is exact.
+  return wanted >= 4 ? count >= 4 : count === wanted;
+}
+
 /** `City.id` + label, for the filter sheet's city chips. */
 export const CITY_OPTIONS: readonly { label: string; value: string }[] = CITIES.map(
   (city: City) => ({ label: city.label, value: city.id })
@@ -248,7 +338,11 @@ export const CITY_OPTIONS: readonly { label: string; value: string }[] = CITIES.
 /** True when any filter that requires the bounded fetch-and-filter mode is set. */
 export function hasClientOnlyFilters(filters: SearchFilters): boolean {
   return Boolean(
-    filters.city || filters.categoryName || filters.furnishing || filters.constructionStatus
+    filters.city ||
+      filters.categoryName ||
+      filters.furnishing ||
+      filters.constructionStatus ||
+      filters.bhk
   );
 }
 
@@ -292,6 +386,7 @@ export function matchesClientFilters(item: PropertySummary, filters: SearchFilte
   ) {
     return false;
   }
+  if (filters.bhk && !matchesBhk(item, filters.bhk)) return false;
   return true;
 }
 
@@ -303,8 +398,27 @@ export function hasAnyCriteria(filters: SearchFilters): boolean {
   );
 }
 
+/**
+ * The rent/sale axis, as a segmented control on the results rail.
+ *
+ * "Buy" and "Rent", not "For sale" and "For rent". Three reasons, in order of
+ * weight:
+ *
+ *  1. It is what Home's hero already says. A user who tapped "Buy" there and
+ *     lands on a control reading "For sale" has to work out that the two are
+ *     the same thing.
+ *  2. It is the verb, and this control is the user choosing what they are
+ *     doing rather than describing the listing. Housing and 99acres both label
+ *     it this way for the same reason.
+ *  3. It fits. The three labels sit on a rail with six facet pills after them,
+ *     and "For sale"/"For rent" cost about 60pt more — enough to push Sort and
+ *     Budget entirely off the first screen, which defeats the rail.
+ *
+ * The card and the detail badge still say "For sale" / "For rent", and that is
+ * correct: those DESCRIBE a listing rather than offering a choice.
+ */
 export const LISTING_TYPE_OPTIONS: readonly { label: string; value: ListingIntent | undefined }[] = [
   { label: 'All', value: undefined },
-  { label: 'For rent', value: 'rent' },
-  { label: 'For sale', value: 'sale' },
+  { label: 'Buy', value: 'sale' },
+  { label: 'Rent', value: 'rent' },
 ];

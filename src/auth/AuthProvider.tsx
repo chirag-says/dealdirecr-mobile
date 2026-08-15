@@ -42,7 +42,9 @@ interface AuthContextValue {
   isReady: boolean;
   login: (values: LoginValues) => Promise<User>;
   register: (values: RegisterValues) => Promise<void>;
-  verifyOtp: (email: string, otp: string) => Promise<User>;
+  /** Buyer registration — creates account and session in one call, no OTP. */
+  registerDirect: (values: RegisterValues) => Promise<User>;
+  verifyOtp: (email: string, otp: string, referralCode?: string) => Promise<User>;
   resendOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -218,15 +220,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await call(usersEndpoints.register, { data: values });
   }, []);
 
+  const registerDirect = useCallback(async (values: RegisterValues): Promise<User> => {
+    // Creates a VERIFIED buyer account and ESTABLISHES THE SESSION via Set-Cookie.
+    // Goes through establishSession to confirm the cookie took, same as login.
+    const response = await call(usersEndpoints.registerDirect, { data: values });
+    return establishSession(response.user);
+  }, [establishSession]);
+
   const verifyOtp = useCallback(
-    async (email: string, otp: string): Promise<User> => {
-      // Returns 201 AND sets the session cookie. Following this with a login call
-      // would be wrong, and would burn one of the five attempts on the auth limiter.
-      //
-      // This is a first sign-in, not a side effect of one: for an owner it is the
-      // ONLY way the account ever becomes authenticated. So it goes through the
-      // same confirmation as login rather than trusting the 201.
-      const response = await call(usersEndpoints.verifyOtp, { data: { email, otp } });
+    async (email: string, otp: string, referralCode?: string): Promise<User> => {
+      const response = await call(usersEndpoints.verifyOtp, {
+        data: { email, otp, referralCode },
+      });
       return establishSession(response.user);
     },
     [establishSession]
@@ -263,6 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isReady: status !== 'restoring',
       login,
       register,
+      registerDirect,
       verifyOtp,
       resendOtp,
       logout,
@@ -270,7 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       endedReason,
       clearEndedReason: () => setEndedReason(null),
     }),
-    [status, user, login, register, verifyOtp, resendOtp, logout, refreshUser, endedReason]
+    [status, user, login, register, registerDirect, verifyOtp, resendOtp, logout, refreshUser, endedReason]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

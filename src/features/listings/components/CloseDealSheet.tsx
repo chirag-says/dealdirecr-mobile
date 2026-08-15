@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { ApiError } from '@/api';
 import { useTheme } from '@/theme';
 import type { ObjectId } from '@/types/backend/common';
 import type { Property } from '@/types/backend/property';
-import { Avatar, Button, Chip, Image, Sheet, Text } from '@/ui';
+import { Avatar, Button, Image, Sheet, Text, useToast } from '@/ui';
 import { pickListingImages } from '../imagePicker';
 import { useCloseDeal } from '../hooks';
 
@@ -20,10 +20,31 @@ import { useCloseDeal } from '../hooks';
  *    this one screen would be a fourth native module stacked onto the
  *    pending dev-client rebuild (docs/HANDOFF.md §5.1) for a feature that
  *    photographing the same paperwork already serves.
+ *
+ *    A consequence worth stating: the website enforces a 15 MB per-file cap
+ *    (`CloseDealModal.jsx:64`) and this does not, because it does not need to.
+ *    Every picked photo goes through `pickListingImages` → `compress`, which
+ *    resizes to a 1600px long edge and re-encodes at JPEG 0.7. That lands far
+ *    under both the website's 15 MB and the backend's own 10 MB, so a size
+ *    check here would be validation that can never fire. If arbitrary file
+ *    upload is ever added, the cap has to come with it.
  *  - No "at least 2 interested users" gate on the buyer list — the backend
  *    itself only requires the selected buyer to appear in
  *    `interestedUsers`, and an owner with exactly one interested user is a
- *    completely ordinary case, not an edge one.
+ *    completely ordinary case, not an edge one. (Corrected 2026-08-13: this
+ *    note used to describe the gate as a divergence FROM the website. The
+ *    website has no such gate either — `CloseDealModal.jsx:286-293` renders
+ *    the list for any count of one or more. There is no divergence here.)
+ *
+ * ---------------------------------------------------------------------------
+ * THE OUTCOME IS DERIVED, NOT CHOSEN — changed 2026-08-13 (defect F14)
+ *
+ * This used to offer Sold/Rented chips. The website derives `closingType`
+ * from the listing's own `listingType` and renders it read-only
+ * (`CloseDealModal.jsx:39-48, 190-208`), and it is right to: the backend
+ * accepts either value with no cross-check, so a chip let an owner mark a
+ * sale listing "rented" and silently corrupt the record. A listing that is
+ * for sale closes as sold. There is no decision here to offer.
  */
 export interface CloseDealSheetProps {
   visible: boolean;
@@ -37,9 +58,18 @@ const MAX_DOCUMENTS = 5;
 export function CloseDealSheet({ visible, property, onClose, onSuccess }: CloseDealSheetProps) {
   const theme = useTheme();
   const { submit, isPending, error, reset } = useCloseDeal(property._id);
+  const toast = useToast();
 
-  const defaultClosingType = /rent/i.test(property.listingType ?? '') ? 'rented' : 'sold';
-  const [closingType, setClosingType] = useState<'sold' | 'rented'>(defaultClosingType);
+  /**
+   * The schema holds six spellings of three meanings, so this tests for
+   * "rent" rather than comparing equality — the same expansion the search
+   * controller does. Anything that is not a rental closes as sold, which also
+   * gives the website's dead-end case (a `listingType` matching neither, where
+   * its own modal blocks with no selector to satisfy it) a sane answer.
+   */
+  const closingType: 'sold' | 'rented' = /rent|lease/i.test(property.listingType ?? '')
+    ? 'rented'
+    : 'sold';
   const [buyerId, setBuyerId] = useState<ObjectId | undefined>(undefined);
   const [documentUris, setDocumentUris] = useState<string[]>([]);
 
@@ -59,7 +89,8 @@ export function CloseDealSheet({ visible, property, onClose, onSuccess }: CloseD
       remainingSlots: MAX_DOCUMENTS - documentUris.length,
     });
     if (deniedPermission) {
-      Alert.alert('Permission needed', 'Allow photo library access to attach documents.');
+      // Explains why the picker did not open. Nothing to decide, so a toast.
+      toast.show('Allow photo library access to attach documents.', 'danger');
       return;
     }
     setDocumentUris((current) => [...current, ...uris].slice(0, MAX_DOCUMENTS));
@@ -93,13 +124,11 @@ export function CloseDealSheet({ visible, property, onClose, onSuccess }: CloseD
         <Text variant="subhead" tone="secondary" className="mb-sm">
           Outcome
         </Text>
-        <View className="mb-lg flex-row gap-sm">
-          <Chip label="Sold" selected={closingType === 'sold'} onPress={() => setClosingType('sold')} />
-          <Chip
-            label="Rented"
-            selected={closingType === 'rented'}
-            onPress={() => setClosingType('rented')}
-          />
+        <View className="mb-lg">
+          <Text variant="bodyEmphasis">{closingType === 'rented' ? 'Rented' : 'Sold'}</Text>
+          <Text variant="footnote" tone="muted" className="mt-xs">
+            Based on your listing type ({property.listingType ?? 'Sale'}).
+          </Text>
         </View>
 
         <Text variant="subhead" tone="secondary" className="mb-sm">

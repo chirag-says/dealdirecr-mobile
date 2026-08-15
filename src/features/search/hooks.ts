@@ -23,7 +23,12 @@ import {
   readRecentSearches,
   removeRecentSearch,
 } from './recent';
-import { RELATED_POOL_SIZE, RELATED_THRESHOLD, selectRelatedProperties } from './related';
+import {
+  RELATED_POOL_SIZE,
+  RELATED_THRESHOLD,
+  selectRelatedProperties,
+  selectSimilarProperties,
+} from './related';
 import { canAddToCompare } from './compare';
 
 /**
@@ -193,6 +198,39 @@ export function useRelatedProperties(
   return { items, isLoading: enabled && query.isPending };
 }
 
+/**
+ * "Similar properties", for the property detail screen.
+ *
+ * Shares `useRelatedProperties`' pool query verbatim — same key, same bounded
+ * page, same five-minute staleness — so a user who searches and then opens a
+ * listing pays for one fetch, not two. Only the scoring differs; `related.ts`
+ * explains why it has to.
+ *
+ * `subject` being undefined is the normal state while the detail screen is
+ * still loading, and it disables the query rather than firing a request whose
+ * result cannot be scored yet.
+ */
+export function useSimilarProperties(
+  subject: PropertySummary | undefined
+): RelatedPropertiesResult {
+  const enabled = Boolean(subject);
+
+  const query = useQuery({
+    queryKey: qk.collection('related-pool', { limit: RELATED_POOL_SIZE, sort: 'newest' }),
+    queryFn: ({ signal }) =>
+      fetchPropertyPage({ limit: RELATED_POOL_SIZE, sort: 'newest' }, signal),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+
+  const items = useMemo(() => {
+    if (!subject || !query.data) return [];
+    return selectSimilarProperties(query.data.items, subject);
+  }, [subject, query.data]);
+
+  return { items, isLoading: enabled && query.isPending };
+}
+
 export { RELATED_THRESHOLD };
 
 // --- Compare properties -----------------------------------------------
@@ -229,5 +267,11 @@ export function useCompareSelection(): CompareSelection {
 
   const clear = useCallback(() => setItems([]), []);
 
-  return { items, isSelected, canToggle, toggle, clear };
+  // Memoised for the same reason as `useSaveToggle`'s return: the results
+  // screen builds its per-card compare props from this inside a `useCallback`,
+  // and a fresh literal would rebuild `renderItem` on every render.
+  return useMemo(
+    () => ({ items, isSelected, canToggle, toggle, clear }),
+    [items, isSelected, canToggle, toggle, clear]
+  );
 }

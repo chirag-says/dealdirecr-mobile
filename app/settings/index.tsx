@@ -8,8 +8,22 @@ import { ApiError } from '@/api';
 import { useAuth } from '@/auth';
 import { optionalNativeModule } from '@/config/optionalNative';
 import { useUpdateProfile } from '@/features/profile';
-import { useTheme } from '@/theme';
-import { Avatar, Button, Card, Input, KeyboardAvoider, Refreshable, Screen, Select, Text } from '@/ui';
+import { screenPadding, scrollBottomPadding } from '@/theme';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  KeyboardAvoider,
+  ListGroup,
+  ListRow,
+  Refreshable,
+  Screen,
+  ScreenHeader,
+  Select,
+  Text,
+} from '@/ui';
 
 /**
  * Optional: absent in Expo Go. A top-level import would throw while Expo
@@ -44,93 +58,70 @@ const GENDER_OPTIONS: readonly { label: string; value: SelectableGender }[] = [
  */
 export default function SettingsScreen() {
   const router = useRouter();
-  const theme = useTheme();
   const { user } = useAuth();
 
+  // A real empty state, not a bare sentence with page padding. This was the
+  // only guest gate in the app with no illustration, no explanation and no way
+  // to act on it.
   if (!user) {
     return (
       <Screen>
-        <Text variant="body" className="p-lg">
-          Sign in to view settings.
-        </Text>
+        <ScreenHeader title="Settings" backTo="/(tabs)/profile" />
+        <EmptyState
+          title="Sign in to manage your account"
+          description="Your profile, password and devices live here once you are signed in."
+          actionLabel="Sign in"
+          onAction={() => router.push('/(auth)/login')}
+        />
       </Screen>
     );
   }
 
   return (
-    <Screen edges={['top', 'bottom']}>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Settings</Text>
-      </View>
+    <Screen>
+      <ScreenHeader title="Settings" backTo="/(tabs)/profile" />
 
       <KeyboardAvoider className="flex-1">
-        <Refreshable contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
+        <Refreshable
+          contentContainerStyle={{
+            padding: screenPadding,
+            paddingBottom: scrollBottomPadding,
+          }}
+        >
           <EditProfileCard />
 
-          <Card className="mt-lg p-0" raised={false}>
-            <Row
+          <ListGroup title="Account" className="mt-xl">
+            <ListRow
               icon="lock-closed-outline"
               label="Change password"
               onPress={() => router.push('/settings/change-password')}
             />
-            <Row
+            <ListRow
               icon="phone-portrait-outline"
               label="Active devices"
+              detail="See where you are signed in"
               onPress={() => router.push('/settings/sessions')}
             />
-            <Row
+          </ListGroup>
+
+          {/* Its own group, with a footer that says what it does. Deleting an
+              account sitting one row below "change password" in the same
+              container reads as an equivalent, reversible setting. */}
+          <ListGroup
+            className="mt-xl"
+            footer="Deleting your account removes your listings, saved searches and reward balance. This cannot be undone."
+          >
+            <ListRow
               icon="trash-outline"
               label="Delete account"
-              danger
+              destructive
               onPress={() => router.push('/settings/delete-account')}
-              last
             />
-          </Card>
+          </ListGroup>
         </Refreshable>
       </KeyboardAvoider>
     </Screen>
   );
-
-  function Row({
-    icon,
-    label,
-    onPress,
-    last = false,
-    danger = false,
-  }: {
-    icon: keyof typeof Ionicons.glyphMap;
-    label: string;
-    onPress: () => void;
-    last?: boolean;
-    danger?: boolean;
-  }) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        className={`flex-row items-center px-base py-md ${last ? '' : 'border-b border-border'}`}
-      >
-        <Ionicons
-          name={icon}
-          size={20}
-          color={danger ? theme.colors.danger : theme.colors.textSecondary}
-        />
-        <Text variant="body" tone={danger ? 'danger' : 'primary'} className="ml-base flex-1">
-          {label}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color={theme.colors.textMuted} />
-      </Pressable>
-    );
-  }
 }
 
 function EditProfileCard() {

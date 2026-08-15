@@ -63,8 +63,16 @@ function ProjectCardComponent({ project, width, onPress }: ProjectCardProps) {
         width,
         borderRadius: radius.lg,
         backgroundColor: theme.colors.surface,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
+        // Shadow, not a border — matched to `PropertyCard` so the same object
+        // does not change its construction between Home and the browse list.
+        // The page is dark enough now (`palette.canvas`) for a shadow to read;
+        // when this card was written it was not, which is why it outlined
+        // itself instead.
+        shadowColor: '#000',
+        shadowOpacity: 0.07,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 3,
         overflow: 'hidden',
       }}
     >

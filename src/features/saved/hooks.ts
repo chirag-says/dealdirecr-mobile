@@ -22,9 +22,9 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 
-import { ApiError, call, propertiesEndpoints, qk } from '@/api';
+import { call, propertiesEndpoints, qk } from '@/api';
 import { useAuth } from '@/auth';
 import { adaptProperty, type PropertySummary } from '@/features/properties';
 import type { ObjectId } from '@/types/backend/common';
@@ -72,91 +72,6 @@ export function useSavedProperties(): SavedListState {
     remaining: Math.max(0, INTEREST_LIMIT - items.length),
     requiresAuth: !signedIn,
   };
-}
-
-/**
- * The interest list as a Set of ids, plus a toggle, for surfaces that draw a
- * heart on many cards at once (Home's rails).
- *
- * ---------------------------------------------------------------------------
- * WHY THIS EXISTS RATHER THAN `useInterest` PER CARD
- *
- * `features/properties/interest.ts` resolves one listing's state with its own
- * `GET /properties/interested/:id` query. That is right for a detail screen
- * and wrong for a rail: ten cards is ten requests on mount, against a backend
- * that rate-limits per IP behind a carrier NAT shared by strangers. The whole
- * Home screen is built to avoid exactly that (see `lib/scrollReveal.tsx`).
- *
- * One list request answers the question for every card at once, and the list
- * is capped at five, so it is small by construction.
- *
- * ---------------------------------------------------------------------------
- * WHAT THE TOGGLE ACTUALLY DOES — READ BEFORE PUTTING IT BEHIND A HEART
- *
- * Adding EMAILS THE OWNER and creates a lead carrying the user's name, email
- * and phone. Removing does NOT unsend that email or delete the lead. The cap
- * is enforced server-side and the sixth add is rejected with a 400, which this
- * surfaces through `error` rather than pre-empting, because the count is
- * server truth.
- */
-export function useSavedIds(): {
-  savedIds: ReadonlySet<string>;
-  toggle: (id: ObjectId) => void;
-  error: string | null;
-} {
-  const { status } = useAuth();
-  const signedIn = status === 'authenticated';
-  const queryClient = useQueryClient();
-  const [error, setError] = useState<string | null>(null);
-
-  const query = useQuery({
-    queryKey: qk.savedProperties(),
-    queryFn: async ({ signal }) => {
-      const response = await call(propertiesEndpoints.saved, { signal });
-      return (response.data ?? []).map(adaptProperty);
-    },
-    enabled: signedIn,
-    staleTime: 30_000,
-  });
-
-  const savedIds = useMemo(
-    () => new Set((query.data ?? []).map((item) => item.id)),
-    [query.data]
-  );
-
-  const mutation = useMutation({
-    mutationFn: ({ id, next }: { id: ObjectId; next: boolean }) =>
-      call(next ? propertiesEndpoints.markInterested : propertiesEndpoints.removeInterest, {
-        params: { id },
-      }),
-    onMutate: () => setError(null),
-    onError: (mutationError) => {
-      // A 400 here is a real answer, not a fault: the five-listing cap, your
-      // own listing, one already marked. The server's wording beats anything
-      // invented here and stays correct if the rule changes.
-      setError(
-        mutationError instanceof ApiError && mutationError.status === 400
-          ? mutationError.message
-          : 'Could not update. Please try again.'
-      );
-    },
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.savedProperties() });
-    },
-  });
-
-  const toggle = useCallback(
-    (id: ObjectId) => {
-      if (!signedIn) {
-        setError('Sign in to save a property and contact its owner.');
-        return;
-      }
-      mutation.mutate({ id, next: !savedIds.has(id) });
-    },
-    [signedIn, savedIds, mutation]
-  );
-
-  return { savedIds, toggle, error };
 }
 
 /**
@@ -210,3 +125,4 @@ export function useRemoveInterest() {
     error: mutation.error,
   };
 }
+

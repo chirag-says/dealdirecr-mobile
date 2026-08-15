@@ -25,10 +25,6 @@ export interface PropertyRailProps {
   loading?: boolean;
   onSelect: (id: string) => void;
   accessibilityLabel?: string;
-  /** Ids currently on the user's interest list. */
-  savedIds?: ReadonlySet<string>;
-  /** Omit to hide the heart. See `PropertyRailCard` for what it actually does. */
-  onToggleSave?: (id: string) => void;
   /** Page dots under the row. Off by default; only Home asks for them. */
   showIndicator?: boolean;
 }
@@ -43,8 +39,6 @@ export function PropertyRail({
   loading = false,
   onSelect,
   accessibilityLabel,
-  savedIds,
-  onToggleSave,
   showIndicator = false,
 }: PropertyRailProps) {
   const width = useRailItemWidth('large');
@@ -52,21 +46,15 @@ export function PropertyRail({
 
   const renderItem = useCallback(
     (property: RailProperty, itemWidth: number) => (
-      <PropertyRailCard
-        property={property}
-        width={itemWidth}
-        onPress={onSelect}
-        saved={savedIds?.has(property.id) ?? false}
-        onToggleSave={onToggleSave}
-      />
+      <PropertyRailCard property={property} width={itemWidth} onPress={onSelect} />
     ),
-    [onSelect, savedIds, onToggleSave]
+    [onSelect]
   );
 
   if (loading) {
     return (
       <View
-        className="flex-row px-lg"
+        className="flex-row px-base"
         style={{ gap: spacing.md }}
         accessibilityLabel="Loading properties"
       >

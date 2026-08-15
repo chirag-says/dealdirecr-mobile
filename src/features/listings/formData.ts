@@ -119,14 +119,37 @@ function commonFields(form: FormData, values: ListingFormValues) {
   const securityDeposit = num(values.securityDeposit);
   if (securityDeposit !== undefined) form.append('securityDeposit', String(securityDeposit));
 
+  /**
+   * Nested `area.*`, which is where the schema actually keeps these. The FLAT
+   * `builtUpArea`/`carpetArea`/`superBuiltUpArea`/`plotArea` whitelist entries
+   * are a trap — see the module doc; Mongoose drops them silently.
+   *
+   * `pricePerSqft` is DERIVED here rather than asked for, the way the website
+   * derives it. Asking an owner for a number that is arithmetic over two
+   * numbers they already gave invites a contradiction between the three.
+   * Computed from super-built-up when present, since that is the area Indian
+   * listings conventionally quote a rate against, else built-up, else total.
+   */
   const area: Record<string, number> = {};
   const totalSqft = num(values.totalSqft);
   const carpetSqft = num(values.carpetSqft);
   const builtUpSqft = num(values.builtUpSqft);
+  const superBuiltUpSqft = num(values.superBuiltUpSqft);
+  const plotSqft = num(values.plotSqft);
   if (totalSqft !== undefined) area.totalSqft = totalSqft;
   if (carpetSqft !== undefined) area.carpetSqft = carpetSqft;
   if (builtUpSqft !== undefined) area.builtUpSqft = builtUpSqft;
+  if (superBuiltUpSqft !== undefined) area.superBuiltUpSqft = superBuiltUpSqft;
+  if (plotSqft !== undefined) area.plotSqft = plotSqft;
+
+  const rateArea = superBuiltUpSqft ?? builtUpSqft ?? totalSqft;
+  if (price !== undefined && rateArea !== undefined && rateArea > 0) {
+    area.pricePerSqft = Math.round(price / rateArea);
+  }
+
   if (Object.keys(area).length > 0) form.append('area', JSON.stringify(area));
+
+  appendIfPresent(form, 'availableFrom', values.availableFrom);
 
   if (values.amenities.length > 0) form.append('amenities', JSON.stringify(values.amenities));
 
@@ -137,9 +160,19 @@ function commonFields(form: FormData, values: ListingFormValues) {
     );
   }
 
-  if (values.reraId.trim()) {
-    form.append('legal', JSON.stringify({ reraId: values.reraId.trim() }));
-  }
+  /**
+   * `legal` is sent whole or not at all — it is one nested object, so sending
+   * only `reraId` (as this did before 2026-08-13) would leave the three
+   * compliance booleans unsettable. They are only included when true: a
+   * blanket `false` on every listing asserts "no fire NOC" where the owner
+   * simply did not answer.
+   */
+  const legal: Record<string, string | boolean> = {};
+  if (values.reraId.trim()) legal.reraId = values.reraId.trim();
+  if (values.occupancyCertificate) legal.occupancyCertificate = true;
+  if (values.tradeLicense) legal.tradeLicense = true;
+  if (values.fireNoc) legal.fireNoc = true;
+  if (Object.keys(legal).length > 0) form.append('legal', JSON.stringify(legal));
 
   if (values.categoryName === 'Residential') {
     appendIfPresent(form, 'bhk', values.bhk);
@@ -187,6 +220,9 @@ export function buildAddFormData(
       state: values.state.trim(),
       pincode: values.pincode.trim(),
       landmark: values.landmark.trim() || undefined,
+      // `address.nearby: [String]`. Add-path only: `updateMyProperty` rebuilds
+      // `data.address` from flat top-level fields and would discard this.
+      nearby: values.nearby.length > 0 ? values.nearby : undefined,
     })
   );
   form.append('city', values.city.trim());

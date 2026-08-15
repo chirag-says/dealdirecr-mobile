@@ -1,11 +1,24 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Dimensions, Pressable, ScrollView, View } from 'react-native';
+import { Dimensions, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useProjectDetail, useUnitTypesForProject } from '@/features/projects';
-import { useTheme } from '@/theme';
+import { gesture, spacing, useTheme } from '@/theme';
 import type { UnitType } from '@/types/backend/project';
-import { Avatar, Badge, Card, ErrorState, Image, PriceLabel, Refreshable, Screen, Skeleton, Text } from '@/ui';
+import {
+  Avatar,
+  Badge,
+  Card,
+  ErrorState,
+  Image,
+  PressableScale,
+  PriceLabel,
+  Refreshable,
+  Screen,
+  Skeleton,
+  Text,
+} from '@/ui';
 
 const GALLERY_HEIGHT = 260;
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -13,6 +26,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 export default function ProjectDetailScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { project, isLoading, error, refresh } = useProjectDetail(id);
   const { unitTypes, isLoading: unitTypesLoading } = useUnitTypesForProject(id);
@@ -21,7 +35,7 @@ export default function ProjectDetailScreen() {
     return (
       <Screen edges={['bottom']}>
         <Skeleton height={GALLERY_HEIGHT} radius={0} />
-        <View className="p-lg">
+        <View className="p-base">
           <Skeleton height={28} className="mb-base" />
           <Skeleton height={120} radius={12} />
         </View>
@@ -67,19 +81,25 @@ export default function ProjectDetailScreen() {
             </View>
           )}
 
-          <Pressable
+          {/*
+            A floating disc rather than a nav bar, because it sits over the
+            gallery. `insets.top` rather than the 48 this used to hard-code:
+            that number was right on exactly one device and put the control
+            under the status bar on any phone with a taller notch.
+          */}
+          <PressableScale
             accessibilityRole="button"
             accessibilityLabel="Go back"
             onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-            hitSlop={12}
-            className="absolute left-md h-10 w-10 items-center justify-center rounded-full bg-black/40"
-            style={{ top: 48 }}
+            hitSlop={gesture.hitSlop}
+            className="absolute left-base h-10 w-10 items-center justify-center rounded-full bg-black/45"
+            style={{ top: insets.top + spacing.sm }}
           >
             <Ionicons name="chevron-back" size={22} color="#fff" />
-          </Pressable>
+          </PressableScale>
         </View>
 
-        <View className="p-lg">
+        <View className="p-base">
           {project.basics?.status ? <Badge label={project.basics.status} tone="accent" className="mb-sm" /> : null}
           <Text variant="title1">{project.basics?.name ?? 'Project'}</Text>
 
@@ -171,26 +191,27 @@ export default function ProjectDetailScreen() {
 }
 
 function UnitTypeRow({ unitType, onPress }: { unitType: UnitType; onPress: () => void }) {
+  const theme = useTheme();
   const price = unitType.pricing?.effectivePrice ?? unitType.pricing?.basePrice;
   const available = unitType.inventory?.available;
 
+  // `Card`'s own `onPress`, not a wrapping `Pressable` — that one carried no
+  // `style` callback, so the row acknowledged a touch with nothing at all.
   return (
-    <Pressable accessibilityRole="button" onPress={onPress}>
-      <Card className="mb-base flex-row items-center justify-between">
-        <View className="flex-1 pr-base">
-          <Text variant="bodyEmphasis">{unitType.config?.name ?? 'Unit type'}</Text>
-          <Text variant="footnote" tone="secondary" className="mt-xs">
-            {[
-              unitType.config?.bedrooms ? `${unitType.config.bedrooms} BHK` : undefined,
-              typeof available === 'number' ? `${available} available` : undefined,
-            ]
-              .filter(Boolean)
-              .join(' · ')}
-          </Text>
-          {price ? <PriceLabel price={price} variant="callout" className="mt-xs" /> : null}
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#9AA0A6" />
-      </Card>
-    </Pressable>
+    <Card onPress={onPress} className="mb-base flex-row items-center justify-between">
+      <View className="flex-1 pr-base">
+        <Text variant="bodyEmphasis">{unitType.config?.name ?? 'Unit type'}</Text>
+        <Text variant="footnote" tone="secondary" className="mt-xs">
+          {[
+            unitType.config?.bedrooms ? `${unitType.config.bedrooms} BHK` : undefined,
+            typeof available === 'number' ? `${available} available` : undefined,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        {price ? <PriceLabel price={price} variant="callout" className="mt-xs" /> : null}
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+    </Card>
   );
 }

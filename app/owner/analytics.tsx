@@ -1,11 +1,21 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 
 import { statusLabel, statusTone, useLeadAnalytics } from '@/features/leads';
-import { useTheme } from '@/theme';
+import { screenPadding, scrollBottomPadding } from '@/theme';
 import type { LeadStatus } from '@/types/backend/lead';
-import { Badge, Card, ErrorState, Refreshable, Screen, Skeleton, Text } from '@/ui';
+import {
+  Badge,
+  Card,
+  EmptyState,
+  ErrorState,
+  Refreshable,
+  Screen,
+  ScreenHeader,
+  Skeleton,
+  Stat,
+  StatRow,
+  Text,
+} from '@/ui';
 
 /**
  * Lead analytics. No chart library is added for this — the mobile app has
@@ -13,42 +23,46 @@ import { Badge, Card, ErrorState, Refreshable, Screen, Skeleton, Text } from '@/
  * is not worth it. Bars are plain `View`s sized by proportion.
  */
 export default function AnalyticsScreen() {
-  const router = useRouter();
-  const theme = useTheme();
   const { analytics, isLoading, error, refresh } = useLeadAnalytics(30);
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Analytics</Text>
-      </View>
+      <ScreenHeader title="Analytics" backTo="/(tabs)/profile" />
 
       {isLoading ? (
-        <View className="px-lg">
+        <View className="px-base">
           <Skeleton height={300} radius={16} />
         </View>
       ) : error ? (
         <ErrorState title="Could not load analytics" onRetry={refresh} />
-      ) : !analytics ? null : (
-        <Refreshable contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
-          <View className="mb-base flex-row flex-wrap">
-            <SummaryTile label="Total leads" value={analytics.totalLeads} />
-            <SummaryTile label="This week" value={analytics.newLeadsThisWeek} />
-            <SummaryTile label="Unread" value={analytics.unreadLeads} />
-            <SummaryTile
-              label="Conversion"
-              value={`${Math.round((analytics.conversionRate ?? 0) * 100) / 100}%`}
-            />
+      ) : !analytics ? (
+        // Was `null`, which left a titled screen with a blank body and no way
+        // to tell "no data yet" from "something broke".
+        <EmptyState
+          title="No analytics yet"
+          description="Once your listing starts receiving leads, you will see the numbers here."
+        />
+      ) : (
+        <Refreshable
+          contentContainerStyle={{
+            padding: screenPadding,
+            paddingBottom: scrollBottomPadding,
+          }}
+        >
+          <StatRow>
+            <Stat label="Total leads" value={analytics.totalLeads} emphasis />
+            <Stat label="This week" value={analytics.newLeadsThisWeek} />
+          </StatRow>
+          <View className="mt-md">
+            <StatRow>
+              <Stat label="Unread" value={analytics.unreadLeads} />
+              <Stat
+                label="Conversion"
+                value={`${Math.round((analytics.conversionRate ?? 0) * 100) / 100}%`}
+              />
+            </StatRow>
           </View>
+          <View className="mb-base" />
 
           <Card>
             <Text variant="bodyEmphasis" className="mb-base">
@@ -68,17 +82,6 @@ export default function AnalyticsScreen() {
         </Refreshable>
       )}
     </Screen>
-  );
-}
-
-function SummaryTile({ label, value }: { label: string; value: number | string }) {
-  return (
-    <Card className="mb-base mr-base w-[47%]" raised={false}>
-      <Text variant="title2">{value}</Text>
-      <Text variant="footnote" tone="secondary">
-        {label}
-      </Text>
-    </Card>
   );
 }
 

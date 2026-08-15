@@ -1,11 +1,8 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 
 import { useRevokeSession, useSessions } from '@/features/profile';
-import { useTheme } from '@/theme';
 import type { UserSessionSummary } from '@/types/backend/user';
-import { Badge, Card, EmptyState, ErrorState, Screen, Skeleton, Text } from '@/ui';
+import { Badge, Card, EmptyState, ErrorState, Screen, ScreenHeader, Skeleton, Text, useToast } from '@/ui';
 
 /**
  * Active devices. `GET /users/sessions` returns every session that would
@@ -13,10 +10,9 @@ import { Badge, Card, EmptyState, ErrorState, Screen, Skeleton, Text } from '@/u
  * think someone else is signed into my account."
  */
 export default function SessionsScreen() {
-  const router = useRouter();
-  const theme = useTheme();
   const { sessions, isLoading, isRefreshing, error, refresh } = useSessions();
   const { revoke, pendingId } = useRevokeSession();
+  const toast = useToast();
 
   const handleRevoke = (session: UserSessionSummary) => {
     Alert.alert(
@@ -24,28 +20,24 @@ export default function SessionsScreen() {
       `This ends the session on ${describeDevice(session)}.`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign out', style: 'destructive', onPress: () => revoke(session.id) },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            await revoke(session.id);
+            toast.show('That device has been signed out.');
+          },
+        },
       ]
     );
   };
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Active devices</Text>
-      </View>
+      <ScreenHeader title="Active devices" />
 
       {isLoading ? (
-        <View className="px-lg">
+        <View className="px-base">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} height={72} className="mb-base" radius={12} />
           ))}

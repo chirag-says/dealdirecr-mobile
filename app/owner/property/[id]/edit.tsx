@@ -74,7 +74,7 @@ export default function EditPropertyScreen() {
       </View>
 
       {isLoading && !property ? (
-        <View className="px-lg">
+        <View className="px-base">
           <Skeleton height={400} radius={16} />
         </View>
       ) : error ? (

@@ -1,11 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ProjectList, useProjectFeed } from '@/features/projects';
 import { useTheme } from '@/theme';
-import { Chip, Input, Screen, Text } from '@/ui';
+import { Chip, Input, Screen, ScreenHeader } from '@/ui';
 
 const CATEGORIES = ['Residential', 'Commercial', 'Mixed Use'] as const;
 
@@ -15,7 +14,6 @@ const CATEGORIES = ['Residential', 'Commercial', 'Mixed Use'] as const;
  * search here is submit-on-enter, not live suggestions.
  */
 export default function ProjectsScreen() {
-  const router = useRouter();
   const theme = useTheme();
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -30,18 +28,7 @@ export default function ProjectsScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)'))}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Projects</Text>
-      </View>
+      <ScreenHeader title="Projects" backTo="/(tabs)" />
 
       <View className="px-lg pb-sm">
         <Input

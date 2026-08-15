@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Alert, Linking, Pressable, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 
 import { useTheme } from '@/theme';
-import { Text } from '@/ui';
+import { Text, useToast } from '@/ui';
 
 /**
  * Video walkthrough — opens externally rather than embedding.
@@ -22,12 +22,16 @@ export interface VideoWalkthroughProps {
 }
 
 export function VideoWalkthrough({ videoUrl }: VideoWalkthroughProps) {
+  const toast = useToast();
   const theme = useTheme();
 
   const handlePress = async () => {
     const supported = await Linking.canOpenURL(videoUrl);
     if (!supported) {
-      Alert.alert('Cannot open video', 'The video link for this listing looks invalid.');
+      // A toast, not a modal: there is nothing to decide and nothing to copy —
+      // the listing simply has a bad link, and the user's next move is to
+      // carry on reading the page they are already on.
+      toast.show('That video link looks invalid.', 'danger');
       return;
     }
     await Linking.openURL(videoUrl);
@@ -38,8 +42,7 @@ export function VideoWalkthrough({ videoUrl }: VideoWalkthroughProps) {
       accessibilityRole="button"
       accessibilityLabel="Watch video walkthrough"
       onPress={() => void handlePress()}
-      className="flex-row items-center rounded-xl border border-border bg-surface-muted p-md"
-      style={({ pressed }) => (pressed ? { opacity: 0.7 } : undefined)}
+      className="flex-row items-center rounded-xl border border-border bg-surface-muted p-md active:opacity-70"
     >
       <View
         className="h-11 w-11 items-center justify-center rounded-full"

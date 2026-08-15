@@ -318,6 +318,11 @@ deduped then sliced. Verified live 2026-08-03.
 
 ### Chat — `/chat` (all `user`)
 
+> **Product status (2026-08-13):** messages/chat is unmounted from the mobile
+> UI (HANDOFF §9.1 D2), matching the website, which mounts no chat anywhere.
+> The endpoints below remain live on the backend and the client code remains
+> on disk, dormant. This table stays for when/if the feature returns.
+
 | Method | Path | Envelope | Notes |
 |---|---|---|---|
 | GET | `/chat/socket-token` | keyed | JWT, **5-minute** life. Fetch per socket connect. Never cache. |
@@ -353,6 +358,13 @@ by user id.
 | GET | `/leads/export` | bare | **binary xlsx**; authenticated, so same User-Agent rule applies |
 
 ### Agreements — `/agreements`
+
+> **WITHDRAWN from the product** (client decision 2026-08-01, confirmed
+> 2026-08-13, HANDOFF §9.1 D1). The backend mount is commented out in the
+> working tree (`server.js:869`); after the next deploy every route below
+> 404s. The website's page already returns 404 and its navbar links are
+> commented out. Do not build a client for these. The table stays only so the
+> withdrawal is legible.
 
 | Method | Path | Auth | Envelope | Notes |
 |---|---|---|---|---|
@@ -392,12 +404,19 @@ Every saved Notification also emails the user via a `post('save')` hook, unless
 
 | Method | Path | Auth | Envelope | Notes |
 |---|---|---|---|---|
-| GET | `/rewards/store` | pub | keyed | |
-| GET | `/rewards/wallet` | user | keyed | |
-| GET | `/rewards/transactions` | user | keyed | controller spreads a service result; shape pinned in M7 |
+| GET | `/rewards/store` | pub | keyed | **DEAD — removed in working tree**; live only until the next deploy. The website has zero callers. Do not build against it. |
+| GET | `/rewards/wallet` | user | keyed | see the shape warning below |
+| GET | `/rewards/transactions` | user | keyed | key confirmed: `{ transactions, pagination }` (`rewardService.js:340-346`) |
 | GET | `/rewards/referral-code` | user | keyed | `referralLink` points at the **website** |
-| GET | `/rewards/referrals` | user | keyed | also a spread result |
-| POST | `/rewards/redeem` | user | keyed | business failure returns **400**, not 200 |
+| GET | `/rewards/referrals` | user | keyed | full shape: `{ totalReferred, signups, firstActions, dealClosures, totalPointsEarned, referrals[] }` (`rewardService.js:466-489`) |
+| POST | `/rewards/redeem` | user | keyed | **DEAD — removed in working tree**, same as `/store`. Redemption is Hubble-only now; that is a separate workstream (HANDOFF §9.1 D3). |
+
+**Wallet shape — corrected 2026-08-13.** `getWallet` returns
+`{ totalPoints, availablePoints, tier, tierMultiplier, nextTierProgress,
+recentTransactions }` (`rewardService.js:314-329`). There is **no `balance`
+key**. The website renders `availablePoints`
+(`RewardsDashboardContent.jsx:183`); mobile's `wallet.balance ?? 0` read is
+defect F1 in HANDOFF §9.3 and shows every user zero points.
 
 ### Projects vertical
 
@@ -415,7 +434,7 @@ Every saved Notification also emails the user via a `post('save')` hook, unless
 | POST | `/campaigns/:id/exit` | user | ok | 10/15 min |
 | POST | `/campaigns/:id/payment-proof` | user | ok | multipart `paymentProof`; no record echoed back |
 | POST | `/bookings` | user | data | login required; needs `projectId, unitTypeId, clientName, clientPhone` |
-| POST | `/bookings/:id/payment` | user | keyed | multipart `screenshot` + UTR |
+| POST | `/bookings/:id/payment` | user | keyed | multipart: file field `screenshot`, text field **`utrNumber`** (not `utr` — defect F5). Backend accepts **either** one (`bookingController.js:164-166`). `payment` on the model is `{ utrNumber, screenshotUrl, submittedAt, verifiedAt, verifiedBy, status: pending\|submitted\|verified\|rejected, rejectionReason }` (`ProjectBooking.js:80-94`) — there is no `utr`, no `verified` boolean (defect F6). |
 | GET | `/bookings/my` | user | data | |
 | GET | `/bookings/payment-config` | user | data | UPI id + QR |
 

@@ -141,4 +141,9 @@ export const qk = {
   leadList: (params: Record<string, string | number | undefined>) =>
     ['leads', 'list', params] as const,
   leadAnalytics: (days: number) => ['leads', 'analytics', days] as const,
+
+  blogs: ['blogs'] as const,
+  /** Empty string is the unfiltered feed, so both share one prefix. */
+  blogList: (category: string) => ['blogs', 'list', category] as const,
+  blogPost: (slug: string) => ['blogs', 'post', slug] as const,
 } as const;

@@ -1,12 +1,15 @@
 /**
- * Rewards: wallet, transactions, referrals and the redemption store.
+ * Rewards: wallet, transactions and referrals.
  *
- * `transactions` and `referrals` are typed loosely in the contract because
- * their controllers spread a service result directly into the envelope (see
- * `src/types/backend/rewards.ts`). The adapters here read defensively —
- * several plausible key names are tried — rather than assuming one, so a
- * screen does not go blank if the actual key differs from the guess until
- * this is pinned down against a live response.
+ * Key names here are PINNED against the service functions that produce them
+ * (see `src/types/backend/rewards.ts`), replacing the earlier defensive
+ * multi-key guessing. The guess that mattered was `wallet.balance`, which
+ * does not exist: the spendable balance is `availablePoints`, and reading the
+ * wrong key showed every user zero points (defect F1).
+ *
+ * Redemption is deliberately absent. The in-house store/redeem endpoints are
+ * deleted backend-side and the website's only redemption path is the Hubble
+ * SDK iframe; mobile redemption is its own workstream (HANDOFF §9.1 D3).
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -14,7 +17,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { call, propertiesEndpoints, qk, rewardsEndpoints } from '@/api';
 import { useAuth } from '@/auth';
 import type { ObjectId } from '@/types/backend/common';
-import type { RedeemRewardRequest, RewardTransaction, StoreReward } from '@/types/backend/rewards';
 
 export function useWallet() {
   const { status } = useAuth();
@@ -30,20 +32,21 @@ export function useWallet() {
     staleTime: 30_000,
   });
 
+  const wallet = query.data ?? null;
+
   return {
-    wallet: query.data ?? null,
-    balance: query.data?.balance ?? 0,
+    wallet,
+    /** Spendable points. `totalPoints` is lifetime-earned and drives tier. */
+    balance: wallet?.availablePoints ?? 0,
+    lifetimePoints: wallet?.totalPoints ?? 0,
+    tier: wallet?.tier ?? null,
+    tierMultiplier: wallet?.tierMultiplier ?? 1,
+    nextTierProgress: wallet?.nextTierProgress ?? null,
     isLoading: enabled && query.isPending,
     error: query.error,
     refresh: () => void query.refetch(),
     requiresAuth: !enabled,
   };
-}
-
-/** Reads whichever array-shaped key the spread service result actually used. */
-function pickTransactions(response: Record<string, unknown>): RewardTransaction[] {
-  const candidate = response.transactions ?? response.data ?? response.history;
-  return Array.isArray(candidate) ? (candidate as RewardTransaction[]) : [];
 }
 
 export function useTransactions() {
@@ -52,16 +55,15 @@ export function useTransactions() {
 
   const query = useQuery({
     queryKey: qk.rewardsTransactions(),
-    queryFn: async () => {
-      const response = await call(rewardsEndpoints.transactions, { data: { limit: 50 } });
-      return pickTransactions(response as unknown as Record<string, unknown>);
-    },
+    queryFn: () => call(rewardsEndpoints.transactions, { data: { limit: 50 } }),
     enabled,
     staleTime: 30_000,
   });
 
   return {
-    transactions: query.data ?? [],
+    transactions: query.data?.transactions ?? [],
+    /** Total across all pages; the screen requests one page of 50. */
+    totalTransactions: query.data?.pagination?.total ?? 0,
     isLoading: enabled && query.isPending,
     isRefreshing: query.isRefetching,
     error: query.error,
@@ -94,51 +96,15 @@ export function useReferral() {
     referralLink: codeQuery.data?.referralLink ?? null,
     totalReferred: statsQuery.data?.totalReferred ?? 0,
     totalPointsEarned: statsQuery.data?.totalPointsEarned ?? 0,
+    // The three milestones the website breaks out separately. Only `signups`
+    // currently contributes points; milestones 2 and 3 are known-incomplete
+    // backend-side, so a non-zero count there is informational, not earnings.
+    signups: statsQuery.data?.signups ?? 0,
+    firstActions: statsQuery.data?.firstActions ?? 0,
+    dealClosures: statsQuery.data?.dealClosures ?? 0,
+    referrals: statsQuery.data?.referrals ?? [],
     isLoading: enabled && (codeQuery.isPending || statsQuery.isPending),
     error: codeQuery.error ?? statsQuery.error,
-  };
-}
-
-export function useRewardsStore() {
-  const query = useQuery({
-    queryKey: qk.rewardsStore(),
-    queryFn: async () => {
-      const response = await call(rewardsEndpoints.store);
-      return response.rewards;
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  return {
-    rewards: query.data ?? ([] as StoreReward[]),
-    isLoading: query.isPending,
-    error: query.error,
-    refresh: () => void query.refetch(),
-  };
-}
-
-/**
- * A business-rule failure (insufficient balance, etc.) is a normal HTTP 400
- * with `success:false`, not a thrown exception distinct from a real error —
- * `call()` still rejects on it, so callers branch on `ApiError.message` the
- * same way as any other 400.
- */
-export function useRedeemReward() {
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: (request: RedeemRewardRequest) => call(rewardsEndpoints.redeem, { data: request }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: qk.rewardsWallet() });
-      void queryClient.invalidateQueries({ queryKey: qk.rewardsTransactions() });
-    },
-  });
-
-  return {
-    redeem: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    error: mutation.error,
-    reset: mutation.reset,
   };
 }
 

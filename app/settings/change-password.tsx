@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { ApiError } from '@/api';
 import { useChangePassword } from '@/features/profile';
 import { useTheme } from '@/theme';
-import { Button, Input, KeyboardAvoider, Screen, Text } from '@/ui';
+import { Button, Input, KeyboardAvoider, Screen, ScreenHeader, Text } from '@/ui';
 
 export default function ChangePasswordScreen() {
   const router = useRouter();
@@ -42,18 +42,7 @@ export default function ChangePasswordScreen() {
 
   return (
     <Screen>
-      <View className="flex-row items-center px-lg pt-md pb-sm">
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => router.back()}
-          hitSlop={12}
-          className="mr-sm -ml-xs h-9 w-9 items-center justify-center"
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.textPrimary} />
-        </Pressable>
-        <Text variant="title2">Change password</Text>
-      </View>
+      <ScreenHeader title="Change password" />
 
       <KeyboardAvoider className="flex-1">
         <ScrollView contentContainerStyle={{ padding: 24 }} keyboardShouldPersistTaps="handled">

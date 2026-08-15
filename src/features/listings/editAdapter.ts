@@ -31,6 +31,11 @@ export function propertyToFormValues(property: Property): ListingFormValues {
     totalSqft: asString(property.area?.totalSqft),
     carpetSqft: asString(property.area?.carpetSqft),
     builtUpSqft: asString(property.area?.builtUpSqft),
+    superBuiltUpSqft: asString(property.area?.superBuiltUpSqft),
+    plotSqft: asString(property.area?.plotSqft),
+    // `area.pricePerSqft` is intentionally not read back: it is derived on
+    // submit, so round-tripping it would let a stale value survive a price
+    // change.
 
     bhk: property.bhk ?? '',
     bedrooms: asString(property.bedrooms),
@@ -52,6 +57,18 @@ export function propertyToFormValues(property: Property): ListingFormValues {
     parkingCovered: asString(property.parking?.covered),
     parkingOpen: asString(property.parking?.open),
     reraId: property.legal?.reraId ?? '',
+    occupancyCertificate: property.legal?.occupancyCertificate ?? false,
+    tradeLicense: property.legal?.tradeLicense ?? false,
+    fireNoc: property.legal?.fireNoc ?? false,
+
+    // Schema type is `Date`, so this arrives as an ISO string. The form wants
+    // `YYYY-MM-DD`, which is its leading 10 characters.
+    availableFrom: property.availableFrom ? String(property.availableFrom).slice(0, 10) : '',
+
+    // Read back so an edit does not silently drop them, even though
+    // `updateMyProperty` rebuilds `address` from flat fields and will not
+    // persist a change — see `formData.ts`.
+    nearby: property.address?.nearby ?? [],
 
     amenities: property.amenities ?? [],
   };

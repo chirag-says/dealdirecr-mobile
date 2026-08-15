@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { View } from 'react-native';
+import Animated, { LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radius, spacing, useTheme } from '@/theme';
@@ -8,43 +9,81 @@ import { PressableScale } from './PressableScale';
 import { Text } from './Text';
 
 /**
- * The bottom bar: four destinations either side of a raised Post action.
+ * The bottom dock.
  *
  * ---------------------------------------------------------------------------
- * WHY THE CENTRE BUTTON IS NOT A TAB
+ * A FLOATING PILL, NOT AN EDGE-TO-EDGE BAR — rebuilt 2026-08-14
  *
- * Posting a property is a TASK, not a place. It opens a form, it is finished
- * or abandoned, and it has no state to come back to — so it has no business
- * holding a destination slot next to Home and Saved, which do. Rendering it
- * as a raised button rather than a fifth tab says that: it is the one control
- * here that starts something instead of navigating somewhere.
+ * The previous bar spanned the full width, sat on a hairline border, and drew
+ * four icons with four labels and a 2pt rule under the active one. Everything
+ * about it was legible and none of it was memorable: it read as chrome the app
+ * was obliged to have rather than as part of the product.
  *
- * It is drawn outside the tab list entirely and never receives a focus state,
- * so `state.index` continues to describe the four real destinations.
+ * This detaches from the screen edges and floats. Two things follow from that
+ * and both are the point: the content scrolls visibly beneath it, so the app
+ * feels layered rather than boxed; and the dock becomes an object with a
+ * shape, which is what lets it carry a shadow and read as premium rather than
+ * as a divider with icons on it.
  *
  * ---------------------------------------------------------------------------
- * WHERE MESSAGES WENT
+ * THE ACTIVE TAB EXPANDS; THE OTHERS ARE ICON-ONLY
  *
- * The design this implements shows Home, Search, Post, Saved, Profile — five
- * slots, four of them destinations. This app has five destinations; Messages
- * is the one with nowhere to sit.
+ * Four labels shown permanently is four pieces of text competing at 11pt, and
+ * on a 360pt screen "Properties" either truncates or forces every other label
+ * to shrink with it. Showing the label only for the tab you are ON solves the
+ * width problem and produces the strongest possible active state — the
+ * selected tab is a different SHAPE, not just a different colour, which
+ * survives both low contrast and colour blindness.
  *
- * It is NOT removed. The `chat` route still exists and is registered; it is
- * reached from the header on Home, which also carries its unread dot (see
- * `features/home/components/Hero.tsx`). That is a real demotion for a
- * marketplace where a deal happens in the thread, and it is the honest cost of
- * a five-slot bar with a task in the middle. Restoring it is one entry here
- * and one line in `_layout.tsx` — the alternative is six slots, which is about
- * 58pt each on a 360pt phone and below a comfortable target.
+ * The trade is real and worth naming: an inactive tab is an icon with no
+ * caption. That is acceptable here and nowhere near universally — the four
+ * glyphs are home, magnifier, heart and person, which are the four most
+ * conventional icons in mobile software. It would NOT be acceptable for a
+ * domain-specific icon, and a fifth destination should bring its label back
+ * rather than push this pattern further.
+ *
+ * Every tab keeps its `accessibilityLabel` regardless, so a screen reader
+ * always announces the destination whether or not it is painted.
+ *
+ * ---------------------------------------------------------------------------
+ * POST IS AN ACTION IN A NAVIGATION BAR, DELIBERATELY
+ *
+ * The standing guidance is that a tab bar holds destinations only. This holds
+ * one action, because posting a property is the single thing an owner opens
+ * this app to do and burying it inside Profile would cost more than the rule
+ * is worth. It is marked as an action rather than a destination by being the
+ * only filled, circular, brand-coloured element here, and it never takes the
+ * selected state.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ACTION IS RED; THE SELECTED TAB IS NOT — changed 2026-08-15
+ *
+ * That claim above — "the only brand-coloured element here" — stopped being
+ * true when the selected tab was given a `brandMuted` pill and brand-red icon
+ * and label. The dock then held two red objects side by side, one a
+ * destination and one an action, and the reported symptom was that the post
+ * button "competes with the navigation". It was not the button. It was that
+ * nothing distinguished it.
+ *
+ * `colors.ts` already says which is which: brand is "the brand mark colour.
+ * Not an action colour", accent is "the primary action colour". The selected
+ * tab now takes the accent, and red means exactly one thing in this bar.
+ *
+ * The separator before the action is the second half. Four destinations, a
+ * hairline, one action — the grouping is stated rather than inferred from the
+ * fact that the last item happens to look different.
  */
 
-/** Routes drawn in the bar, in order, with the gap for the action between. */
-const LABELS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  index: { label: 'Home', icon: 'home-outline' },
-  search: { label: 'Search', icon: 'search-outline' },
-  saved: { label: 'Saved', icon: 'heart-outline' },
-  profile: { label: 'Profile', icon: 'person-outline' },
+/** Drawn in this order. A registered route absent from this map is skipped. */
+const TABS: Record<string, { label: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  index: { label: 'Home', icon: 'home' },
+  properties: { label: 'Properties', icon: 'search' },
+  saved: { label: 'Saved', icon: 'heart' },
+  profile: { label: 'Profile', icon: 'person' },
 };
+
+const DOCK_HEIGHT = 58;
+const ITEM_HEIGHT = 42;
 
 export interface TabBarProps extends BottomTabBarProps {
   onPost: () => void;
@@ -53,128 +92,138 @@ export interface TabBarProps extends BottomTabBarProps {
 export function TabBar({ state, navigation, onPost }: TabBarProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
 
-  // Only the routes this bar draws, in the order declared above. A route
-  // registered in the navigator but absent from LABELS (chat) is deliberately
-  // skipped rather than rendered unlabelled.
-  const visible = state.routes.filter((route) => LABELS[route.name]);
-  const half = Math.ceil(visible.length / 2);
-
-  const renderTab = (route: (typeof visible)[number]) => {
-    // `visible` was filtered on this same lookup, so it is always present —
-    // narrowed rather than asserted so a future route added to the filter but
-    // not to LABELS fails here instead of rendering a blank slot.
-    const spec = LABELS[route.name];
-    if (!spec) return null;
-
-    const focused = state.routes[state.index]?.key === route.key;
-
-    return (
-      <PressableScale
-        key={route.key}
-        accessibilityLabel={spec.label}
-        accessibilityState={focused ? { selected: true } : {}}
-        activeScale={0.92}
-        onPress={() => {
-          // `navigate` rather than a raw dispatch, so tapping the active tab
-          // pops its stack to the root instead of pushing a duplicate.
-          if (!focused) navigation.navigate(route.name);
-        }}
-        style={{
-          flex: 1,
-          height: 52,
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 3,
-        }}
-      >
-        <Ionicons
-          name={focused ? (spec.icon.replace('-outline', '') as keyof typeof Ionicons.glyphMap) : spec.icon}
-          size={23}
-          color={focused ? theme.colors.brand : theme.colors.textMuted}
-        />
-        <Text
-          variant="caption"
-          style={{
-            color: focused ? theme.colors.brand : theme.colors.textMuted,
-            fontWeight: focused ? '600' : '400',
-          }}
-        >
-          {spec.label}
-        </Text>
-
-        {/* The active marker. A short rule under the label rather than a
-            filled pill behind it, so the bar stays light. */}
-        <View
-          style={{
-            marginTop: 2,
-            width: 16,
-            height: 2,
-            borderRadius: radius.full,
-            backgroundColor: focused ? theme.colors.brand : 'transparent',
-          }}
-        />
-      </PressableScale>
-    );
-  };
+  const visible = state.routes.filter((route) => TABS[route.name]);
 
   return (
     <View
+      pointerEvents="box-none"
       style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        backgroundColor: theme.colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: theme.colors.border,
-        paddingTop: spacing.sm,
-        // Background extends behind the home indicator; content does not.
-        paddingBottom: Math.max(spacing.sm, insets.bottom),
-        paddingHorizontal: spacing.xs,
+        paddingHorizontal: spacing.base,
+        // Clears the home indicator when there is one, and still floats off
+        // the bottom edge on a device without one.
+        paddingBottom: insets.bottom > 0 ? insets.bottom : spacing.base,
       }}
     >
-      {visible.slice(0, half).map(renderTab)}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          height: DOCK_HEIGHT,
+          paddingHorizontal: spacing.xs,
+          borderRadius: radius.full,
+          backgroundColor: theme.colors.surface,
+          // A hairline as well as a shadow. On a light page the shadow alone
+          // is nearly invisible at the top edge of the pill, and the outline
+          // is what keeps the shape crisp there.
+          borderWidth: 1,
+          borderColor: theme.colors.border,
+          shadowColor: '#000',
+          shadowOpacity: 0.14,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 12,
+        }}
+      >
+        {visible.map((route) => {
+          const spec = TABS[route.name];
+          if (!spec) return null;
 
-      {/*
-        The action sits in its own fixed-width column so the four tabs stay
-        evenly distributed either side of it. It is NOT absolutely positioned:
-        the column reserves the space, which is what keeps the button off the
-        labels on a narrow screen.
-      */}
-      <View style={{ width: 64, alignItems: 'center' }}>
+          const focused = state.routes[state.index]?.key === route.key;
+
+          return (
+            <Animated.View
+              key={route.key}
+              // The width change is the animation. `LinearTransition` measures
+              // it rather than requiring a hard-coded expanded width, which
+              // would be wrong the moment a label is translated.
+              layout={reduceMotion ? undefined : LinearTransition.springify().damping(20)}
+              style={focused ? { flex: 1 } : undefined}
+            >
+              <PressableScale
+                accessibilityRole="button"
+                accessibilityLabel={spec.label}
+                accessibilityState={{ selected: focused }}
+                activeScale={0.94}
+                onPress={() => {
+                  // `navigate`, not a raw dispatch: tapping the active tab pops
+                  // its stack to the root rather than pushing a duplicate.
+                  if (!focused) navigation.navigate(route.name);
+                }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: ITEM_HEIGHT,
+                  paddingHorizontal: focused ? spacing.base : spacing.md,
+                  borderRadius: radius.full,
+                  backgroundColor: focused ? theme.colors.accentMuted : 'transparent',
+                }}
+              >
+                <Ionicons
+                  name={focused ? spec.icon : (`${spec.icon}-outline` as keyof typeof Ionicons.glyphMap)}
+                  size={21}
+                  color={focused ? theme.colors.accent : theme.colors.textSecondary}
+                />
+
+                {focused ? (
+                  <Text
+                    variant="footnote"
+                    numberOfLines={1}
+                    style={{
+                      marginLeft: spacing.sm,
+                      color: theme.colors.accent,
+                      fontWeight: '600',
+                    }}
+                  >
+                    {spec.label}
+                  </Text>
+                ) : null}
+              </PressableScale>
+            </Animated.View>
+          );
+        })}
+
+        {/* Destinations end here. */}
+        <View
+          style={{
+            width: 1,
+            alignSelf: 'stretch',
+            marginLeft: spacing.xs,
+            marginVertical: spacing.md,
+            backgroundColor: theme.colors.border,
+          }}
+        />
+
+        {/* The one action. Circular, filled, and now the only red thing in the
+            dock — see the module doc. */}
         <PressableScale
+          accessibilityRole="button"
           accessibilityLabel="Post a property"
           onPress={onPost}
           activeScale={0.9}
           style={{
-            // Rides above the bar's top edge, which is what marks it as the
-            // one control here that is not a destination.
-            marginTop: -22,
-            width: 52,
-            height: 52,
+            width: ITEM_HEIGHT,
+            height: ITEM_HEIGHT,
+            marginLeft: spacing.xs,
             borderRadius: radius.full,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: theme.colors.brand,
+            // Raised off the dock rather than sitting flush in it. A filled
+            // disc with no depth on a white pill reads as a swatch; a small
+            // shadow is what makes it read as a button on top of a surface.
             shadowColor: theme.colors.brand,
-            shadowOpacity: 0.32,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 },
-            elevation: 6,
-            // A ring in the page colour, so the circle reads as sitting in
-            // front of the bar rather than punched through it.
-            borderWidth: 4,
-            borderColor: theme.colors.background,
+            shadowOpacity: 0.35,
+            shadowRadius: 8,
+            shadowOffset: { width: 0, height: 3 },
+            elevation: 4,
           }}
         >
-          <Ionicons name="add" size={26} color={theme.colors.textOnAccent} />
+          <Ionicons name="add" size={24} color={theme.colors.textOnAccent} />
         </PressableScale>
-
-        <Text variant="caption" tone="muted" style={{ marginTop: 1 }}>
-          Post
-        </Text>
       </View>
-
-      {visible.slice(half).map(renderTab)}
     </View>
   );
 }
