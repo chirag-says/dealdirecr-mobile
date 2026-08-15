@@ -2499,3 +2499,212 @@ button has to be findable.
 - `pagerHeight` on a landscape rotation.
 - The enquiry sheet at the largest accessibility text sizes (still not
   scrollable — carried over from §12.6).
+
+---
+
+## 14. 2026-08-16 — Audit remediation
+
+Implements the confirmed findings of the two-pass source-level audit (§13 and
+the route inventory). Scope was the audit's list; no screen classified 🟢 was
+touched.
+
+### 14.1 🔴 `Card`'s default padding double-padded the attribute table
+
+`DetailAttributes` renders its rows inside a `Card` and each row supplies its
+own `px-base py-md`. When `Card` gained `padded = true` by default (§11), those
+rows went to 16 + 16 = 32pt from the card edge, and the separator's
+`marginLeft: 16` inset — written assuming the row's own 16 was the only one —
+stopped landing under the label it insets to.
+
+My own Card audit in §12 missed it: the grep looked two lines past `<Card` and
+the padded child is four lines down inside a `.map`. Fixed with
+`padded={false}`; a deeper scan found no other real instance (the two other
+hits are inner boxes inside padded cards, which is intentional).
+
+### 14.2 🔴 `projects/[id]`
+
+Three independent defects, all structural:
+
+- **`Dimensions.get('window').width` at module scope** — captured once at
+  import, so every gallery page was sized from the width at app start and never
+  updated on rotation or split-screen. Now `useWindowDimensions`.
+- **Fixed `GALLERY_HEIGHT = 260`** — a fixed height over a variable width is a
+  fixed crop over a variable one. Now `galleryHeight(width)`, same derivation
+  `DetailHero` uses.
+- **Mapped `ScrollView` gallery** — every image mounted and decoded at once,
+  which is exactly what `DetailHero`'s doc argues against. Now a windowed
+  `FlatList` (`windowSize={3}`, `removeClippedSubviews`, `getItemLayout`).
+- **`refreshing={false}` hardcoded** — the pull gesture fired the request and
+  showed nothing. The screen owns the flag now.
+- Amenities moved from `Badge` to `Tag`, matching property detail, where the
+  reason is documented: `Chip`/`Badge`-as-control announces dead buttons.
+
+### 14.3 🔴 `projects/unit/[unitTypeId]` action bar had no safe-area inset
+
+`px-lg py-md` with no `insets.bottom`, so the CTA sat under the home indicator.
+Now inset, `fullWidth`, on `screenPadding`, with its height measured by
+`onLayout` instead of the scroll view clearing it with a hardcoded 100. The
+sold-out disabled state gained the caption that explains it.
+
+### 14.4 🔴 `forgot-password` was an account-enumeration oracle
+
+The file's own docstring said the success state must not confirm whether the
+phone exists, "would turn this endpoint into an account-enumeration oracle" —
+and the error branch printed the backend's `No account found with this phone
+number` verbatim. The protection was worthless: anyone could test any Indian
+mobile, ten digits at a time.
+
+A 404 now lands on the same "code sent" screen as a success. Rate limiting is
+still surfaced, because a user who must wait needs to know how long and it
+reveals nothing about the account.
+
+### 14.5 🔴 Six owner routes had no client-side role guard
+
+`auth/components/OwnerOnly.tsx` — signed out gets `SignInPrompt`, signed-in
+non-owner gets an `EmptyState` routed at Profile, where the buyer-to-owner
+upgrade sheet lives. `restoring` renders through, so a real owner never sees a
+flash of refusal on cold start.
+
+**It is not security and must not be read as one.** Every route stays gated
+server-side. This changes what a legitimate user is TOLD: before it, a buyer
+who deep-linked `/owner/leads` got a titled screen that spun and then said
+"Could not load leads" — an access decision presented as a fault.
+
+### 14.6 🟠 Interaction fixes
+
+| Where | Was | Now |
+|---|---|---|
+| `unit`, `campaign`, `booking/[bookingId]` | `backTo` skipped one or two levels (or defaulted to `/(tabs)`) | back to the screen the user came from |
+| `campaign` Join/Leave | equal-width side by side, Leave always enabled | Join is the only button; Leave demoted below it and offered only once joined, matching how `owner/properties` demoted Delete |
+| `projects/bookings`, `owner/leads/index` rows | `<Pressable><Card>` — no press feedback, no accessible name | `Card`'s own `onPress`, the correction two sibling files already document |
+| `owner/leads/[id]` contact buttons | one `isAddingContact` flag spun all four | per-action pending state |
+| `rewards` referral pill | a `View` with a share glyph that did nothing | the control it looked like |
+| `projects/index` chips | fixed row, clipped at large text sizes | scrolling rail |
+
+### 14.7 🟠 `Card`'s accessible name landed on the wrong node
+
+`Card extends ViewProps`, so a caller's `accessibilityLabel` typechecked and
+then went onto the inner `View` — one node below the `PressableScale` a screen
+reader actually focuses. It read as a correctly labelled control and was not
+one. Hoisted onto the pressable, along with `accessibilityHint`.
+
+### 14.8 🟡 Also fixed
+
+`px-lg` → `screenPadding` in `projects/index`, `projects/[id]`,
+`unit/[unitTypeId]`, `campaign/[campaignId]`, `owner/leads/index` · `key={index}`
+→ a stable key in lead contact history · `rewards` pull-spinner no longer fires
+on first load · chat's online dot got an accessible name (it was colour-only
+state whenever a property title was present) · `projects/index` clear-search
+target raised to `gesture.hitSlop`.
+
+### 14.9 Not done, needs your call
+
+- **`app/property/[id]/map.tsx`** — an M4 `Placeholder` stub on a live but
+  unreachable route. Deleting it was declined as out of scope; it is still
+  there and a deep link still lands on scaffolding.
+- The `Save ≠ Enquire` backend split (§12.1) remains open and untouched.
+
+---
+
+## 15. 2026-08-16 — Owner Analytics and Leads
+
+Two screens taken from "four numbers and a status chart" and "a database list"
+to a CRM an owner can triage from. Scope was these two plus the lead-detail
+consistency they imply; nothing else was touched.
+
+### 15.1 What the analytics endpoint actually returns
+
+Read from `leadController.js:348`. The shape of the screen follows from it, and
+three things were NOT built because of it:
+
+| Field | Period |
+|---|---|
+| `statusStats` | **all time** — the aggregate has no date match |
+| `dailyLeads` | within `days` — the only period-scoped series |
+| `totalLeads`, `convertedLeads`, `conversionRate`, `unreadLeads` | all time |
+| `newLeadsThisWeek` | last 7 days, **hard-coded**, not derived from `days` |
+| `leadsByProperty` | top 10 listings |
+
+**No period selector.** `days` scopes exactly one field. A "Last 30 days"
+control that changes a sparkline while five numbers above it hold still states
+that the numbers are scoped when they are not. Every figure is labelled with
+its own true period instead.
+
+**No trend arrows.** There is no previous-period figure anywhere in the
+response. Computing one would mean inventing it.
+
+**No leads-by-property table.** Real, unused data — but an owner account is
+capped at one listing server-side, so today that table is one row restating the
+total. First thing to add if the cap is lifted.
+
+### 15.2 Analytics composition
+
+Attention → scale → pipeline → activity → bridge.
+
+The old screen was four equal `Stat` cards and an unlabelled bar chart, which
+reads as four equally important facts, so none of them led. Now: an accent
+banner for unread leads (the only actionable figure, hidden entirely at zero),
+one emphasised primary `Stat` for the total, four subordinate ones each
+carrying its own period, then the pipeline, then the chart.
+
+The chart kept its plain-`View` bars — no chart library for fourteen numbers —
+and gained what it was missing: a total, a peak value, first and last dates,
+and a hairline for zero days so a gap reads as "no enquiries" rather than as
+missing data.
+
+### 15.3 🔴 The Leads whitespace was `flexGrow`, not padding
+
+The filter rail was a horizontal `FlatList`. React Native applies
+`baseHorizontal` to those — `{ flexGrow: 1, flexShrink: 1, ... }`
+(`ScrollView.js:1867`) — so in a column parent it claimed every remaining point
+of vertical space and pushed the list off screen. The chips drew at the top of
+that space, which is why it read as a gap beneath them.
+
+Fixed by capping it in a plain `View`, which is exactly what `QuickFilterBar`
+does on Properties. No negative margins.
+
+### 15.4 The lead card
+
+`LeadCard` answers who / what / when / where. What it replaced showed the
+status **twice** — a "New" badge beside the name and a status badge under the
+price — which cost the slot where recency belonged.
+
+Unread is now a left rail plus a heavier name, the convention every mail client
+uses, rather than a second competing pill. That frees the top-right for one
+badge (the stage) and the footer for `relativeDay(createdAt)` plus whether any
+contact has been logged. No scoring, no priority, no "hot" — the backend gives
+`isViewed`, `status`, `createdAt` and `contactHistory`, and the owner ranks.
+
+The three stat pills above the rail became one line in `ScreenHeader`'s
+subtitle. It switches to describing the filtered view when a filter is on,
+because `getLeads` computes `stats` over every lead regardless of the query — a
+subtitle reading "18 leads" above a list of one would be quietly wrong.
+
+### 15.5 The bridge
+
+`LeadPipeline` rows are routes: tapping a stage opens `/owner/leads?status=…`,
+validated against `LEAD_STATUSES` on arrival. Before it, the only way from "4
+negotiating" to those four leads was to leave, open Leads, and find the chip.
+
+Stage order, not count order — sorting by count would reshuffle the pipeline
+whenever a status changed and break the one thing the shape is good at. Counts
+and labels are always text; strip the colour and nothing becomes unreadable.
+
+### 15.6 Lead detail
+
+Not redesigned. Three consistency changes so the row and the detail say the
+same things in the same order: the identity card gained the recency line, the
+listing card gained the price and became a real `Card onPress` (it was a bare
+`Pressable` around the title with no accessible name), and the status block was
+relabelled "Move to stage" — a verb, because it is the editor rather than a
+second statement of a fact the chips already carry.
+
+### 15.7 Two things worth knowing
+
+- `Stat`'s body is `flex: 1`, so it needs a row parent. The primary tile is
+  wrapped in a one-child `StatRow` rather than a plain `View`, where it would
+  collapse to zero height.
+- `Chip`'s selected state swaps `callout` (16) for `bodyEmphasis` (17), so a
+  selected chip is 1pt taller. `alignItems: stretch` in the rail equalises them
+  so nothing jumps, but the rail's own height shifts by a point. Left alone —
+  changing `Chip` is a global change and this pass was scoped to composition.

@@ -78,7 +78,9 @@ export default function BookingScreen() {
 
   return (
     <Screen>
-      <ScreenHeader title="Booking" />
+      {/* Back to the bookings list. With no `backTo`, `ScreenHeader` falls
+          back to `/(tabs)`, which dropped the user out of the flow entirely. */}
+      <ScreenHeader title="Booking" backTo="/projects/bookings" />
 
       {isLoading ? (
         <View className="p-base">

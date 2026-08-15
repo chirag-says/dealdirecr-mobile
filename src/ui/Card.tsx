@@ -107,8 +107,20 @@ export function Card({
   // Scale, not opacity. Dimming is the language of "disabled"; a card that
   // fades when you touch it reads as rejecting the touch. `PressableScale`
   // springs on press-DOWN and honours reduced motion.
+  //
+  // The accessible name is hoisted onto the PRESSABLE, not left on the surface
+  // inside it. `Card` extends `ViewProps`, so an `accessibilityLabel` passed by
+  // a caller used to typecheck and then land on the inner `View` — one node
+  // below the thing a screen reader actually focuses. It read as a correctly
+  // labelled control and was not one.
   return (
-    <PressableScale accessibilityRole="button" onPress={onPress} activeScale={0.985}>
+    <PressableScale
+      accessibilityRole="button"
+      accessibilityLabel={rest.accessibilityLabel}
+      accessibilityHint={rest.accessibilityHint}
+      onPress={onPress}
+      activeScale={0.985}
+    >
       {content}
     </PressableScale>
   );
