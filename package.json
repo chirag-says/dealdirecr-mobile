@@ -9,6 +9,7 @@
     "start:go:lan": "expo start --go",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "relock": "node scripts/relock.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "contract:check": "tsc --noEmit -p tsconfig.json"
