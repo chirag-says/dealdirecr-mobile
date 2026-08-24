@@ -4,12 +4,16 @@ import { EMPTY_LISTING_FORM, type CategorizedPhoto, type ListingFormValues } fro
 const asString = (value: unknown): string => (value === undefined || value === null ? '' : String(value));
 
 export function propertyToFormValues(property: Property): ListingFormValues {
-  const category: ListingFormValues['categoryName'] =
-    property.categoryName === 'Commercial' ? 'Commercial' : 'Residential';
+  /*
+    The stored category, verbatim.
 
+    This used to collapse anything that was not exactly `Commercial` down to
+    `Residential`, which silently rewrote a `Land & Plots` listing's category
+    the moment its owner opened Edit — and then submitted the rewrite.
+  */
   return {
     ...EMPTY_LISTING_FORM,
-    categoryName: category,
+    categoryName: property.categoryName ?? 'Residential',
     propertyTypeName: property.propertyTypeName ?? '',
     listingType: /rent/i.test(property.listingType ?? '') ? 'Rent' : 'Sale',
     title: property.title ?? '',
@@ -51,8 +55,13 @@ export function propertyToFormValues(property: Property): ListingFormValues {
     storeRoom: property.extras?.storeRoom ?? false,
 
     washrooms: asString(property.washrooms),
-    pantry: property.pantry ?? '',
-    meetingRooms: property.meetingRooms ?? '',
+    /*
+      Rebuilt from whatever the stored listing happens to carry rather than from
+      a fixed field list, because the set of commercial config keys depends on
+      the property type. Unknown keys are simply not shown by the form; they are
+      also not destroyed, since the form only submits what it holds.
+    */
+    commercialConfig: {},
 
     parkingCovered: asString(property.parking?.covered),
     parkingOpen: asString(property.parking?.open),

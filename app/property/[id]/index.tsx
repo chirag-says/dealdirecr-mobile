@@ -10,6 +10,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
+import { setPendingIntent } from '@/auth';
 import { WEB_URL } from '@/config/env';
 import {
   DetailActions,
@@ -96,11 +97,9 @@ import {
  * hero's parallax; routing it through React would re-render this screen — with
  * its eighty-field attribute table — sixty times a second.
  *
- * ---------------------------------------------------------------------------
- * STILL TO COME IN M4: the Leaflet locator map, held with the rest of the map
- * phase pending a dev-client rebuild for its native dependencies. Everything
- * else in the plan — gallery, attribute table, interest, contact, message,
- * share, report — is built.
+ * The locator map lives at `property/[id]/map` and is reached from the Location
+ * section below; see that screen for the WebView/Leaflet approach and the
+ * degrade-to-locality-text fallback.
  */
 /**
  * Below this the view count is suppressed. Same threshold and same reasoning as
@@ -112,13 +111,24 @@ const MEANINGFUL_VIEW_COUNT = 10;
 export default function PropertyDetailScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, resume } = useLocalSearchParams<{ id: string; resume?: string }>();
 
   const { property, isLoading, isMissing, error, refresh } = usePropertyDetail(id);
 
   const [reporting, setReporting] = useState(false);
 
-  const [enquiring, setEnquiring] = useState(false);
+  /**
+   * `resume: 'enquire'` means the user pressed "I'm interested" as a guest and
+   * has just signed in. The sheet opens on arrival so the act they started is
+   * the act they finish, rather than the app returning them to the listing and
+   * making them press the same button twice.
+   *
+   * Only this one value is honoured. Anything else in the param is ignored, so
+   * a stale or hand-written link opens the listing and does nothing more — a
+   * deep link must never be able to raise a confirmation the user did not ask
+   * for.
+   */
+  const [enquiring, setEnquiring] = useState(resume === 'enquire');
 
   /**
    * Enquiry slots left, or null when unknown.
@@ -186,7 +196,13 @@ export default function PropertyDetailScreen() {
   // Declared before the early returns: hooks cannot be called conditionally,
   // and the loading and 404 branches below both return before the action bar.
   const interest = useInterest(id, {
-    onRequiresAuth: () => router.push('/(auth)/login'),
+    // Records the listing and the act before leaving, so signing in returns
+    // here with the confirmation raised rather than dropping the user on the
+    // Search tab to find this listing again. See `auth/pendingIntent.ts`.
+    onRequiresAuth: () => {
+      setPendingIntent({ kind: 'enquire', propertyId: id });
+      router.push('/(auth)/login');
+    },
   });
 
   // Local view history, written once per listing. The backend counts its own
@@ -281,7 +297,7 @@ export default function PropertyDetailScreen() {
           title="Listing no longer available"
           description="It may have been sold, rented, or taken down by its owner."
           actionLabel="Back to search"
-          onAction={() => router.replace('/(tabs)/properties')}
+          onAction={() => router.replace('/(tabs)/search')}
         />
       </Screen>
     );
@@ -537,7 +553,41 @@ export default function PropertyDetailScreen() {
             </Section>
           ) : null}
 
-          {/* M4, remaining phase: the locator map. */}
+          {/*
+            The locator map, reached rather than embedded.
+
+            An inline map would mount a second WebView on a screen that is
+            already long and image-heavy; a tappable row is lighter and is the
+            pattern the portals use. Shown only when the listing has a real
+            coordinate — with none, the locality text above is all there is to
+            say, and a row leading to a "no exact location" screen would be a
+            dead end wearing a chevron.
+          */}
+          {property.coordinates ? (
+            <Section title="Location" navLabel="Location">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="See location on map"
+                onPress={() => router.push(`/property/${id}/map`)}
+                className="flex-row items-center rounded-xl border border-border bg-surface active:opacity-80"
+                style={{ padding: spacing.base, gap: spacing.md }}
+              >
+                <View
+                  className="items-center justify-center rounded-lg"
+                  style={{ width: 44, height: 44, backgroundColor: theme.colors.brandMuted }}
+                >
+                  <Ionicons name="map-outline" size={22} color={theme.colors.brand} />
+                </View>
+                <View className="flex-1">
+                  <Text variant="bodyEmphasis">See location on map</Text>
+                  <Text variant="footnote" tone="secondary" numberOfLines={1}>
+                    {property.locationLabel || property.addressLine || 'Open the map'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={theme.colors.textMuted} />
+              </Pressable>
+            </Section>
+          ) : null}
 
           {owner ? (
             <Section title="Owner" navLabel="Owner">
@@ -615,6 +665,7 @@ export default function PropertyDetailScreen() {
       */}
       <DetailActions
         interest={interest}
+        property={property}
         remaining={enquiriesLeft}
         onRequestEnquire={() => setEnquiring(true)}
         onHeightChange={setActionBarHeight}

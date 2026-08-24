@@ -7,25 +7,22 @@
  * zod schema work with, converted at submit time.
  */
 
-export type ListingCategory = 'Residential' | 'Commercial';
-
-export const RESIDENTIAL_TYPES = [
-  'Apartment / Flat',
-  'Independent House / Villa',
-  'Plot / Land',
-  'Penthouse',
-  'Studio Apartment',
-  'Farmhouse',
-] as const;
-
-export const COMMERCIAL_TYPES = [
-  'Office Space',
-  'Shop / Showroom',
-  'Warehouse / Godown',
-  'Industrial Shed',
-  'Co-working Space',
-  'Commercial Plot',
-] as const;
+/**
+ * A category name as the SERVER spells it.
+ *
+ * A `'Residential' | 'Commercial'` union until 2026-08-24, which was wrong in
+ * both directions: it excluded `Land & Plots`, a real category no owner could
+ * reach from this app, and it implied a closed set the client is not entitled
+ * to decide. The vocabulary is the server's — see `taxonomy.ts` — so this is
+ * the server's string, and the two places that genuinely branch on it treat
+ * `Commercial` as the special case and everything else as residential-shaped.
+ *
+ * The hardcoded `RESIDENTIAL_TYPES`/`COMMERCIAL_TYPES` arrays that sat here
+ * were deleted with it. They had drifted from the names the backend accepts and
+ * were failing six of twelve submissions at the last step; `useListingTaxonomy`
+ * fetches the real list instead.
+ */
+export type ListingCategory = string;
 
 export const AMENITIES = [
   'Lift',
@@ -75,12 +72,44 @@ export interface ListingFormValues {
   superBuiltUpSqft: string;
   plotSqft: string;
 
+  /**
+   * The pinned coordinate, as strings at six decimals — the precision the
+   * website stores and the form displays.
+   *
+   * Strings rather than numbers because they are also editable text fields, and
+   * a half-typed "19." is not a number. Parsed at submit.
+   */
+  latitude: string;
+  longitude: string;
+
+  /** `Yes`/`No` on the website's select; sent as the string it shows. */
+  gstApplicable: boolean;
+  /** Sell only. */
+  bookingAmount: string;
+  /**
+   * Rent only, and default TRUE like the website — most Indian rentals quote an
+   * inclusive figure, and defaulting the other way invites a wrong number in
+   * the maintenance field.
+   */
+  maintenanceIncluded: boolean;
+
+  /** Commercial only: Bare Shell / Warm Shell / Fully Furnished. */
+  commercialSubType: string;
+
+  /** Optional walkthrough link. Sent verbatim as `videoUrl`. */
+  videoUrl: string;
+
   // Residential
+  /** The chip label — `2 BHK`, `Studio`. Sent as `features.bhk`. */
+  bhkType: string;
   bhk: string;
   bedrooms: string;
   bathrooms: string;
   balconies: string;
   furnishing: string;
+  /** New / 1-5 Years / 5-10 Years / 10+ Years. */
+  propertyAge: string;
+  floorNo: string;
   totalFloors: string;
   facing: string;
   constructionStatus: string;
@@ -89,10 +118,24 @@ export interface ListingFormValues {
   studyRoom: boolean;
   storeRoom: boolean;
 
+  /** Residential + Rent only. */
+  allowedFor: string;
+  petFriendly: string;
+
   // Commercial
   washrooms: string;
-  pantry: string;
-  meetingRooms: string;
+  floorHeight: string;
+  powerLoad: string;
+  /**
+   * The per-property-type numeric fields from `COMMERCIAL_CONFIGS`, keyed by
+   * the exact name they are submitted under inside `features`.
+   *
+   * A bag rather than named fields because the set changes with the property
+   * type — eight types with five fields each would be forty mostly-unused
+   * columns on this interface, and every one of them would have to be added
+   * here whenever the website adds a config.
+   */
+  commercialConfig: Record<string, string>;
 
   parkingCovered: string;
   parkingOpen: string;
@@ -139,21 +182,34 @@ export const EMPTY_LISTING_FORM: ListingFormValues = {
   builtUpSqft: '',
   superBuiltUpSqft: '',
   plotSqft: '',
+  latitude: '',
+  longitude: '',
+  gstApplicable: false,
+  bookingAmount: '',
+  maintenanceIncluded: true,
+  commercialSubType: '',
+  videoUrl: '',
+  bhkType: '',
   bhk: '',
   bedrooms: '',
-  bathrooms: '',
-  balconies: '',
-  furnishing: '',
+  bathrooms: '1',
+  balconies: '0',
+  furnishing: 'Unfurnished',
+  propertyAge: 'New',
+  floorNo: '',
   totalFloors: '',
   facing: '',
-  constructionStatus: '',
+  constructionStatus: 'Ready to Move',
   servantRoom: false,
   poojaRoom: false,
   studyRoom: false,
   storeRoom: false,
-  washrooms: '',
-  pantry: '',
-  meetingRooms: '',
+  allowedFor: 'Family',
+  petFriendly: 'No',
+  washrooms: '1',
+  floorHeight: '',
+  powerLoad: '',
+  commercialConfig: {},
   parkingCovered: '',
   parkingOpen: '',
   reraId: '',

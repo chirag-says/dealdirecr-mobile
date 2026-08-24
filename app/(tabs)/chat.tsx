@@ -49,15 +49,21 @@ export default function ChatListScreen() {
           {
             text: 'Archive',
             style: 'destructive',
+            // Reports the outcome — see `settings/sessions.tsx` for the bug
+            // this shape replaces.
             onPress: async () => {
-              await remove(conversation.id);
-              toast.show('Conversation archived.');
+              try {
+                await remove(conversation.id);
+                toast.show('Conversation archived.');
+              } catch {
+                toast.show('Could not archive that conversation.', 'danger');
+              }
             },
           },
         ]
       );
     },
-    [remove]
+    [remove, toast]
   );
 
   return (
@@ -82,7 +88,7 @@ export default function ChatListScreen() {
           title="No conversations yet"
           description="Message an owner from any listing to start one."
           actionLabel="Browse listings"
-          onAction={() => router.push('/(tabs)/properties')}
+          onAction={() => router.push('/(tabs)/search')}
         />
       ) : (
         <FlatList
