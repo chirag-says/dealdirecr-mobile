@@ -18,14 +18,22 @@ import { Pressable, Text as RNText, ScrollView, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { startAnalytics } from '@/analytics';
 import { createQueryClient, PERSIST_MAX_AGE, queryPersister, shouldPersistQuery } from '@/api';
-import { AuthProvider } from '@/auth';
+import { AuthProvider, PhoneVerificationSheet } from '@/auth';
+import { AnimatedSplash } from '@/features/onboarding';
+import { PushRouter } from '@/notifications';
+import { initSentry, wrapRoot } from '@/observability';
 import { dmSans, navigationThemes, ThemeProvider, useTheme } from '@/theme';
 import { FontOverrideProvider, OfflineBanner, ToastProvider } from '@/ui';
 
 // Held open until DM Sans (loaded for the Home redesign, see `theme/fonts.ts`)
 // is ready, so Home never flashes the system face before swapping to it.
 void SplashScreen.preventAutoHideAsync();
+
+// Before anything else can throw. A no-op without `EXPO_PUBLIC_SENTRY_DSN` or
+// without the native module; see `observability/sentry.ts`.
+initSentry();
 
 /**
  * Root layout and provider stack.
@@ -75,8 +83,12 @@ void SplashScreen.preventAutoHideAsync();
  */
 const FONT_GATE_MS = 3000;
 
-export default function RootLayout() {
+function RootLayout() {
   const [queryClient] = useState(createQueryClient);
+
+  // Usage events: the timer, the foreground/background flushes and the first
+  // `session_start`. Idempotent, so Fast Refresh cannot stack it.
+  useEffect(startAnalytics, []);
   const [fontsLoaded, fontError] = useFonts({
     DMSans_400Regular,
     DMSans_500Medium,
@@ -86,6 +98,13 @@ export default function RootLayout() {
 
   /** The deadline half of the gate. See the note above. */
   const [gateExpired, setGateExpired] = useState(false);
+
+  // The launch motion (features/onboarding/AnimatedSplash) takes over from
+  // the native splash the moment the fonts are in, and comes down on its own
+  // once its choreography ends. Until then it covers whatever the bootstrap
+  // route is deciding underneath.
+  const [splashDone, setSplashDone] = useState(false);
+  const onSplashDone = useCallback(() => setSplashDone(true), []);
 
   useEffect(() => {
     const timer = setTimeout(() => setGateExpired(true), FONT_GATE_MS);
@@ -122,6 +141,10 @@ export default function RootLayout() {
         >
           <ThemeProvider>
             <AuthProvider>
+              {/* Push taps become routes here. Renders nothing; needs the
+                  auth tree so a tap into a signed-in screen lands on the
+                  screen's own sign-in prompt rather than a crash. */}
+              <PushRouter />
               {/*
                 DM Sans for the whole app. This used to be mounted at Home's
                 root only, which made every other screen render in the platform
@@ -133,7 +156,20 @@ export default function RootLayout() {
                     it, and inside the theme so it can read colours. */}
                 <ToastProvider>
                   <Navigation />
+                  {/*
+                    The just-in-time phone gate. Mounted once, here, because it
+                    is raised by the API layer rather than by a screen: a gated
+                    request opens it, waits, and then replays itself.
+
+                    It has to sit ABOVE the Stack so it paints over whatever
+                    screen triggered it, and it must never be a route — routing
+                    away would lose the listing the user was standing on, which
+                    is the exact failure this design exists to prevent. Renders
+                    nothing until the backend refuses a gated action.
+                  */}
+                  <PhoneVerificationSheet />
                   <OfflineBanner />
+                  {splashDone ? null : <AnimatedSplash onDone={onSplashDone} />}
                 </ToastProvider>
               </FontOverrideProvider>
             </AuthProvider>
@@ -143,6 +179,13 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+/**
+ * `Sentry.wrap` adds the touch-event and profiling hooks around the root; it
+ * is the identity when Sentry did not initialise. Named function above, so
+ * the export stays a component expo-router can pick up.
+ */
+export default wrapRoot(RootLayout);
 
 /**
  * The navigator, and the two pieces of chrome that have to agree with the
@@ -183,6 +226,9 @@ function Navigation() {
         <Stack.Screen name="index" />
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
+        {/* The first-launch welcome. A fade, because it arrives from under
+            the launch motion rather than from a tap. */}
+        <Stack.Screen name="welcome" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack>
     </NavigationThemeProvider>
   );

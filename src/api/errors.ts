@@ -31,7 +31,16 @@ export class ApiError extends Error {
   /** Seconds until a rate limit resets, when the server told us. */
   readonly retryAfterSeconds: number | undefined;
   /** Extra fields the backend attaches to specific failures. */
-  readonly details: Pick<BackendErrorBody, 'blockReason' | 'lockoutUntil' | 'requiredRoles'>;
+  readonly details: Pick<
+    BackendErrorBody,
+    | 'blockReason'
+    | 'lockoutUntil'
+    | 'requiredRoles'
+    | 'holdUntil'
+    | 'visitId'
+    | 'attemptsRemaining'
+    | 'email'
+  >;
 
   constructor(init: {
     message: string;
@@ -220,6 +229,10 @@ export function normalizeError(error: unknown): ApiError {
         blockReason: body?.blockReason,
         lockoutUntil: body?.lockoutUntil,
         requiredRoles: body?.requiredRoles,
+        holdUntil: body?.holdUntil,
+        visitId: body?.visitId,
+        attemptsRemaining: body?.attemptsRemaining,
+        email: body?.email,
       },
     });
   }

@@ -40,7 +40,7 @@ export { HomeGreeting, type HomeGreetingProps } from './components/HomeGreeting'
 export { HomeHero, type HomeHeroProps } from './components/HomeHero';
 export {
   HomeHeader,
-  HOME_HEADER_ROW,
+  SEARCH_PIN_WINDOW,
   type HomeHeaderProps,
 } from './components/HomeHeader';
 export { CityPickerSheet, type CityPickerSheetProps } from './components/CityPickerSheet';
@@ -73,3 +73,4 @@ export { CollectionRail, type CollectionRailProps } from './components/Collectio
  * What survives here is what a search tool can use: the static browse tables,
  * the city and collection data, and the rails that read from disk.
  */
+export { detectCity, type DetectCityResult } from './detectCity';

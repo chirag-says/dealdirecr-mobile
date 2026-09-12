@@ -84,6 +84,36 @@ export const qk = {
   savedSearches: ['savedSearches'] as const,
   savedSearchList: () => ['savedSearches', 'mine'] as const,
 
+  /**
+   * The shortlist, now server-backed (Phase 1, F7).
+   *
+   * Two keys rather than one because they answer two different questions at
+   * two different costs. `shortlistIds` is the cheap membership sync every
+   * save button reads; `shortlistList` is the full card projection only the
+   * Activity screen needs. A save invalidates the domain, so both refresh
+   * together, but a screen that only needs membership never pays for the list.
+   *
+   * The device-local MMKV store is still the synchronous read model behind
+   * both (it is the guest list AND the offline cache) — see
+   * `features/shortlist/store.ts`. These keys own the network half.
+   */
+  shortlist: ['shortlist'] as const,
+  shortlistList: () => ['shortlist', 'list'] as const,
+  shortlistIds: () => ['shortlist', 'ids'] as const,
+  /** Public, per token. Somebody else's list; nothing here is per-user. */
+  shortlistShared: (token: string) => ['shortlist', 'shared', token] as const,
+
+  /**
+   * Locality price data (Phase 4, F18). Public and slow-moving — it is a
+   * quarterly aggregate, so it is cached long and refetched rarely.
+   */
+  localities: (params: Record<string, string | number | undefined>) =>
+    ['localities', 'list', params] as const,
+  locality: (slug: string, listingType: string) => ['localities', slug, listingType] as const,
+  /** The listing form's one comparison line. Keyed on every input that changes it. */
+  priceGuidance: (params: Record<string, string | undefined>) =>
+    ['localities', 'guidance', params] as const,
+
   notifications: ['notifications'] as const,
   notificationList: () => ['notifications', 'list'] as const,
 
@@ -132,6 +162,8 @@ export const qk = {
   rewardsReferralCode: () => ['rewards', 'referralCode'] as const,
   rewardsReferrals: () => ['rewards', 'referrals'] as const,
   rewardsStore: () => ['rewards', 'store'] as const,
+  /** Public and slow-moving: the explainer numbers, not the user's balance. */
+  rewardsPolicy: () => ['rewards', 'policy'] as const,
 
   /** Owner's own listing(s). Separate from `properties.saved`: this is what the
    *  signed-in owner is SELLING, not what they marked interest in. */
@@ -141,6 +173,25 @@ export const qk = {
   leadList: (params: Record<string, string | number | undefined>) =>
     ['leads', 'list', params] as const,
   leadAnalytics: (days: number) => ['leads', 'analytics', days] as const,
+
+  /**
+   * Deals: the lead seen from either side (`GET /deals`). Its own domain,
+   * not under `leads`, because a buyer has deals and no leads, and because
+   * a visit or a message changes a deal without changing the owner's CRM
+   * list. Every deal mutation invalidates the whole domain: the list rows
+   * carry `stage`, `nextVisit` and `unread`, all of which a write can move.
+   */
+  deals: ['deals'] as const,
+  /** Infinite list. `page` is the page param and deliberately excluded. */
+  dealList: (params: Record<string, string | number | undefined>) =>
+    ['deals', 'list', params] as const,
+  dealDetail: (leadId: ObjectId) => ['deals', 'detail', leadId] as const,
+
+  reviews: ['reviews'] as const,
+  reviewEligibility: (verificationId: ObjectId) =>
+    ['reviews', 'eligibility', verificationId] as const,
+  /** Public, per subject. Infinite; `page` excluded as above. */
+  reviewsForUser: (userId: ObjectId) => ['reviews', 'user', userId] as const,
 
   blogs: ['blogs'] as const,
   /** Empty string is the unfiltered feed, so both share one prefix. */

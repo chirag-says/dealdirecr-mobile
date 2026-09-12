@@ -110,6 +110,46 @@ export const PREF_KEYS = {
   /** Whether the local-notification permission prompt has been shown once
    *  (M13). Asked at most once ever, not on every Messages tab visit. */
   notificationPermissionAsked: 'notifications.permissionAsked',
+  /**
+   * The Expo push token last POSTed to `/users/push-token`, with the user it
+   * was registered for and when. Lets the same token skip a re-post for 24h,
+   * and is what `POST /users/logout` sends so the server can drop the device.
+   * Cleared whenever the session ends. See `notifications/pushToken.ts`.
+   */
+  pushToken: 'notifications.pushToken',
+  /**
+   * Stable per-install id, generated once. Sent as `anon` on usage events and
+   * as `installationId` on push-token registration. Not account data: it
+   * survives logout, because its job is to count a guest across sessions.
+   */
+  installationId: 'analytics.installationId',
+  /**
+   * The first-launch welcome screen has been dismissed, by Skip or by going
+   * to log in. Device-level, like the notification prompt: it records that
+   * this install has been introduced, not anything about an account.
+   */
+  welcomeSeen: 'onboarding.welcomeSeen',
+  /**
+   * The one-time permissions primer (`app/setup.tsx`) has been dismissed.
+   * Device-level, like `welcomeSeen`: it records that this install has been
+   * asked, not what it answered; the OS holds the answers.
+   */
+  setupSeen: 'onboarding.setupSeen',
+  /** Usage events not yet delivered to `POST /events`. See `analytics/queue.ts`. */
+  analyticsQueue: 'analytics.queue',
+  /**
+   * The user id this install's id was last POSTed to `/users/device` for.
+   * Survives logout because the link it records does. See `auth/deviceLink.ts`.
+   */
+  deviceLinkedFor: 'auth.deviceLinkedFor',
+  /**
+   * The accounts this install has already handed its device-local shortlist to
+   * (`POST /shortlist/merge`), as a JSON array of user ids. Survives logout for
+   * the same reason `deviceLinkedFor` does: the handover it records happened.
+   * See `features/shortlist/merge.ts` for why merging twice is the bad
+   * direction to fail in.
+   */
+  shortlistMergedFor: 'property.shortlistMergedFor',
 } as const;
 
 /**

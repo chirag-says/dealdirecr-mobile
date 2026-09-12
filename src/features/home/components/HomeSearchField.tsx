@@ -7,6 +7,14 @@ import { RecentSearches, useRecentSearches, useSearchPreview } from '@/features/
 import { gesture, radius, spacing, useTheme } from '@/theme';
 import { PressableScale, Skeleton, Text, useTextInputStyle } from '@/ui';
 import type { City } from '../cities';
+import {
+  HERO_SEARCH_BLUE,
+  HERO_SEARCH_GAP_PX,
+  HERO_SEARCH_INK,
+  HERO_SEARCH_PILL_PX,
+  HERO_SEARCH_PLACEHOLDER,
+  useMockScale,
+} from '../heroTheme';
 
 /**
  * The hero's search field — a real input that answers with real listings.
@@ -125,28 +133,37 @@ export function HomeSearchField({
     onOpenProperty(id);
   };
 
+  const mockPx = useMockScale();
   const placeholder = city ? `Search in ${city.label}` : 'Search locality, project or city';
   const previewItems = preview.items.slice(0, MAX_PREVIEW_ROWS);
   const more = Math.max(preview.total - previewItems.length, 0);
 
   return (
-    <View style={{ marginTop: flush ? 0 : spacing.base }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-        {/* The field. A real input now, styled as the pill the trigger used to
-            imitate. The search glyph moved to the button on the right, where it
-            is the thing you press rather than a decoration on the left. */}
+    <View style={{ marginTop: flush ? 0 : mockPx(HERO_SEARCH_GAP_PX) }}>
+      {/* The search pill, to the reference (measured pass): a white pill 86
+          tall with the glyph 30 from its left edge, and the blue submit — an
+          84 circle — INSIDE the pill's right end, one pixel in from its edge.
+          It used to hang 28 beyond the pill, which read as the button drifting
+          off to the right (2026-09-06). Same input, same handlers, same
+          submit; only the dress changed. */}
+      <View style={{ height: mockPx(HERO_SEARCH_PILL_PX), justifyContent: 'center' }}>
         <View
           style={{
-            flex: 1,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
             flexDirection: 'row',
             alignItems: 'center',
-            gap: spacing.sm,
-            height: 52,
-            paddingHorizontal: spacing.base,
-            borderRadius: radius.full,
-            backgroundColor: theme.colors.surface,
+            gap: mockPx(24),
+            paddingLeft: mockPx(30),
+            paddingRight: mockPx(100),
+            borderRadius: mockPx(43),
+            backgroundColor: '#FFFFFF',
           }}
         >
+          <Ionicons name="search-outline" size={mockPx(30)} color={HERO_SEARCH_INK} />
           <TextInput
             ref={inputRef}
             value={query}
@@ -155,13 +172,22 @@ export function HomeSearchField({
             onBlur={() => setFocused(false)}
             onSubmitEditing={() => submit(query)}
             placeholder={placeholder}
-            placeholderTextColor={theme.colors.textSecondary}
+            placeholderTextColor={HERO_SEARCH_PLACEHOLDER}
             selectionColor={theme.colors.accent}
             returnKeyType="search"
             autoCapitalize="none"
             autoCorrect={false}
             accessibilityLabel="Search properties, localities or projects"
-            style={[inputStyle, { flex: 1, paddingVertical: spacing.md }]}
+            style={[
+              inputStyle,
+              {
+                flex: 1,
+                paddingVertical: 0,
+                fontSize: mockPx(26),
+                lineHeight: mockPx(32),
+                color: HERO_SEARCH_INK,
+              },
+            ]}
           />
           {query.length > 0 ? (
             <Pressable
@@ -173,29 +199,30 @@ export function HomeSearchField({
                 inputRef.current?.focus();
               }}
             >
-              <Ionicons name="close-circle" size={18} color={theme.colors.textMuted} />
+              <Ionicons name="close-circle" size={mockPx(32)} color="#9CA3AF" />
             </Pressable>
           ) : null}
         </View>
 
-        {/* The search button — the search glyph, and the ONE control that runs
-            the full search. Surface fill, not brand: a brand-red button on the
-            brand-red hero would vanish. */}
+        {/* The submit button — the ONE control that runs the full search. */}
         <PressableScale
           accessibilityRole="button"
           accessibilityLabel="Search"
           onPress={() => submit(query)}
           activeScale={0.94}
           style={{
-            width: 52,
-            height: 52,
+            position: 'absolute',
+            right: mockPx(1),
+            top: mockPx(1),
+            width: mockPx(84),
+            height: mockPx(84),
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: radius.full,
-            backgroundColor: theme.colors.surface,
+            borderRadius: mockPx(42),
+            backgroundColor: HERO_SEARCH_BLUE,
           }}
         >
-          <Ionicons name="search" size={20} color={theme.colors.brand} />
+          <Ionicons name="search" size={mockPx(40)} color="#FFFFFF" />
         </PressableScale>
       </View>
 

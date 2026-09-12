@@ -1,4 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image as ExpoImage } from 'expo-image';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Dimensions, StyleSheet, View } from 'react-native';
 import Animated, {
@@ -9,75 +11,57 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { gesture, radius, screenPadding, spacing, useTheme, withAlpha } from '@/theme';
+import { gesture, radius, useTheme } from '@/theme';
 import { Avatar, PressableScale, Text } from '@/ui';
 import type { City } from '../cities';
+import {
+  HEADER_ROW_PX,
+  HEADER_TOP_PX,
+  HERO_BOTTOM_PX,
+  HERO_HEADER_GLASS,
+  HERO_HEADER_INK,
+  HERO_SEARCH_PILL_PX,
+  HERO_TEXT,
+  useHeroScheme,
+  useMockScale,
+} from '../heroTheme';
 import { HomeSearchField } from './HomeSearchField';
 
 /**
- * Home's header. Pinned, always visible, at every scroll position.
+ * The sticky header, drawn to the reference mockup (measured pass, 2026-09-05).
+ *
+ * Every number below is a reference pixel through `mockPx`; see
+ * `heroTheme.ts` for why. Measured from the mockup:
+ *
+ *   wordmark        x 40, y 95 (25 below the status bar), 258 wide
+ *   city chip       right-aligned group, 48 tall, pale glass, dark text
+ *   bell            60 circle, pale glass, dark glyph
+ *   avatar          60 circle, white, dark glyph; 30 from the right edge
+ *   controls        centred on the wordmark's line, 14 apart
+ *
+ * The wordmark is the website's `dealdirect_logo.png`, drawn as it is: no
+ * tagline under it (2026-09-06). The city chip is smaller than the two
+ * circles beside it so the wordmark keeps its full width on a narrow phone;
+ * before, a 230-wide chip left the logo's `flex: 1` column too little room
+ * and the image shrank to fit. The bell and the avatar use the dock's own
+ * glyphs at rest, `notifications-outline` and `person-outline`, so the same
+ * destination looks the same at the top of the screen and the bottom.
  *
  * ---------------------------------------------------------------------------
- * WHY IT IS ALWAYS THERE RATHER THAN FADING IN
+ * TRANSPARENT AT REST, SOLID ONCE SCROLLED
  *
- * The first version of this appeared only once the hero had scrolled away,
- * which left the top of the screen with no controls at all for the first
- * screenful — exactly the gap it was built to close, just moved. Identity,
- * listing and notifications are not "things you reach for after scrolling";
- * they are the frame the screen lives in.
+ * At the top of the page the bar has no fill: the photograph runs up under
+ * it and the sky is what the wordmark sits on. As the page scrolls the fill
+ * fades in to the hero's own near-black over the window in which the search
+ * field arrives, so the moment the bar has content to separate from, it has
+ * a colour to do it with.
  *
- * So this row never moves. What CHANGES with scroll is one thing: the search
- * field joins it once the hero's own search field has left. Two search fields
- * on screen at once would be two places for the same query to live, and an
- * empty slot waiting for one would be a gap under a bar.
- *
- * That makes the header the only part of Home that is chrome. Everything
- * beneath it — headline, city, intent chips, the hero's search field — scrolls
- * away as content, which is what it is.
- *
- * ---------------------------------------------------------------------------
- * THE SEARCH FIELD IS PINNED, NOT REVEALED — rebuilt 2026-08-24
- *
- * The first version slid a search row down out of the bar once the hero had
- * scrolled far enough. Reported as "this button appears from top to bottom",
- * and the objection is right: a control that arrives from somewhere is a
- * SECOND field, and the user had just watched the hero's own field leave.
- *
- * What happens now is a handover, engineered so it cannot be seen. The hero's
- * field scrolls up until its top edge reaches this bar's bottom edge; at that
- * exact offset this copy takes over, at the identical position and size, and
- * the content keeps scrolling underneath it. The field appears to STOP rather
- * than to reappear.
- *
- * Three things have to hold for the handover to be invisible, and all three are
- * load-bearing rather than styling:
- *
- *  1. **Identical geometry.** Both copies are the same component at the same
- *     52pt height inside the same `screenPadding`, so at the crossover they
- *     occupy the same pixels. This is why the header renders `HomeSearchField`
- *     rather than a lookalike.
- *  2. **An exact pin offset.** `pinOffset` is measured from the hero's real
- *     field position, not derived from the hero's height. The hero grows with
- *     text size and with the selected city's name, so a computed guess would
- *     hand over early on one device and late on another.
- *  3. **The two reds are the same red.** The block behind this field can snap
- *     to full height the instant the pin is crossed, because the hero directly
- *     behind it is the same brand fill. There is nothing to fade in but the
- *     field itself.
- *
- * The hero side counter-translates its own copy across the same short window,
- * so neither drifts while they cross over. See `HomeHero`.
- *
- * ---------------------------------------------------------------------------
- * ANIMATING HEIGHT HERE IS SAFE, AND THAT IS NOT GENERALLY TRUE
- *
- * This is ONE element with no siblings competing for the same axis, inside an
- * absolutely positioned parent that cannot reflow anything on the screen.
- * Nothing can be pushed by it, so nothing can collide with it — the condition
- * the tab dock's collision bug violated.
- *
- * Driven by the same scroll offset the reveal system already runs on the UI
- * thread. No second listener, and nothing re-rendered while scrolling.
+ * THE HANDOVER IS ONE SLAB REPLACING ANOTHER (2026-09-06). The bar's fill has
+ * the hero's two bottom corners, and its pinned row ends the same distance
+ * under the pill that the hero's block does. The hero reports the pin from
+ * the pill's own top, so at the moment the hero's curved bottom edge reaches
+ * the bar's bottom, the bar's identical curved edge is already there, and
+ * the eye sees the hero stop rather than a second bar appear over it.
  */
 
 export interface HomeHeaderProps {
@@ -99,31 +83,31 @@ export interface HomeHeaderProps {
   onOpenProperty: (id: string) => void;
   onOpenProfile: () => void;
   onOpenUpdates: () => void;
-  onListProperty: () => void;
+  onOpenCityPicker: () => void;
+  /**
+   * The signed-in user is an owner with no listing yet. The city chip gives
+   * way to "Add listing" for them (2026-09-06): an owner account exists to
+   * post one property, and until it has, that is the thing the top of Home
+   * should offer. Everyone else keeps the city chip.
+   */
+  canList?: boolean;
+  onAddListing?: () => void;
 }
 
-/**
- * The always-visible row. Exported so the hero can pad itself clear of it
- * rather than both guessing the same number.
- */
-export const HOME_HEADER_ROW = 52;
-
-/** The pill's height, matched exactly by the hero's copy. */
-const SEARCH_FIELD = 52;
-
-/** The pill plus the breathing room under it, once pinned. */
-const SEARCH_ROW = SEARCH_FIELD + spacing.sm;
-
-/**
- * How much scroll the crossover takes, shared with the hero so both sides run
- * on the same window. Short on purpose: it is a handover between two identical
- * things, not a transition, and every extra point is a point where two copies
- * of the same field are on screen at once.
- */
+/** How many scrolled pixels the crossfade between the two field copies takes. */
 export const SEARCH_PIN_WINDOW = 10;
 
-/** Enough to hold the suggestion panel while the field is focused. */
+/**
+ * The pinned row: the pill plus the same room under it that the hero keeps,
+ * so the bar's bottom lands where the hero's bottom was. See the module doc.
+ */
+const SEARCH_ROW_PX = HERO_SEARCH_PILL_PX + HERO_BOTTOM_PX;
+
 const FOCUSED_HEIGHT = Dimensions.get('window').height;
+
+/** The wordmark asset is 308×82; the reference renders it 258 wide. */
+const LOGO_WIDTH_PX = 258;
+const LOGO_HEIGHT_PX = (LOGO_WIDTH_PX * 82) / 308;
 
 export function HomeHeader({
   scrollY,
@@ -138,28 +122,31 @@ export function HomeHeader({
   onOpenProperty,
   onOpenProfile,
   onOpenUpdates,
-  onListProperty,
+  onOpenCityPicker,
+  canList = false,
+  onAddListing,
 }: HomeHeaderProps) {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
+  const mockPx = useMockScale();
+  const hero = useHeroScheme();
+  const theme = useTheme();
 
-  /**
-   * Held open while the panel is up.
-   *
-   * The panel renders INSIDE this bar, so the bar has to be tall enough to
-   * contain it. On Android a child drawn outside its parent's bounds does not
-   * receive touches at all — `overflow: 'visible'` would produce a panel that
-   * looks right and cannot be tapped — so the height is real rather than
-   * spilled.
-   */
   const [searchFocused, setSearchFocused] = useState(false);
 
-  /*
-    Nothing until the hero has reported where its field actually is. A guessed
-    pin would hand over at the wrong pixel, which is the one failure this whole
-    arrangement exists to avoid.
-  */
+  // Nothing until the hero has reported where its field actually is. A
+  // guessed pin would hand over at the wrong pixel, which is the one failure
+  // this whole arrangement exists to avoid.
   const armed = pinOffset > 0;
+
+  const fillStyle = useAnimatedStyle(() => {
+    if (searchFocused) return { opacity: 1 };
+    if (!armed) return { opacity: 0 };
+    return {
+      opacity: interpolate(scrollY.value, [0, Math.max(pinOffset, 1)], [0, 1], Extrapolation.CLAMP),
+    };
+  }, [pinOffset, armed, searchFocused]);
+
+  const searchRow = mockPx(SEARCH_ROW_PX);
 
   const searchRowStyle = useAnimatedStyle(() => {
     if (searchFocused) return { height: FOCUSED_HEIGHT, opacity: 1 };
@@ -172,102 +159,177 @@ export function HomeHeader({
       Extrapolation.CLAMP
     );
 
+    // Full height the instant the pin is crossed, rather than growing with
+    // the fade: a growing box would clip the field and reveal it top-down.
     return {
-      /*
-        Full height the instant the pin is crossed, rather than growing with
-        the fade.
-
-        A growing box would clip the field it contains and reveal it top-down —
-        the shutter this replaced. Snapping is invisible because the block is
-        brand red and the hero directly behind it is the same brand red, so
-        there is nothing to see arrive except the field, which crossfades.
-      */
-      height: progress > 0 ? SEARCH_ROW : 0,
+      height: progress > 0 ? searchRow : 0,
       opacity: progress,
     };
-  }, [pinOffset, armed, searchFocused]);
+  }, [pinOffset, armed, searchFocused, searchRow]);
+
+  const control = {
+    width: mockPx(60),
+    height: mockPx(60),
+    borderRadius: mockPx(30),
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: HERO_HEADER_GLASS,
+  };
 
   return (
-    <View
-      style={[
-        styles.host,
-        { paddingTop: insets.top, backgroundColor: theme.colors.brand },
-      ]}
-    >
-      {/* Always. Identity, the selling action, notifications. */}
-      <View style={styles.row}>
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="Your account"
-          hitSlop={gesture.hitSlop}
-          onPress={onOpenProfile}
-          activeScale={0.94}
-        >
-          {name ? (
-            <Avatar uri={avatarUri} name={name} size="sm" />
-          ) : (
-            <Ionicons name="person-circle-outline" size={30} color={theme.colors.textOnAccent} />
-          )}
-        </PressableScale>
+    <View style={[styles.host, { paddingTop: insets.top + mockPx(HEADER_TOP_PX) }]}>
+      {/* The hero is a photograph in every scheme, so the status bar is light
+          on Home regardless of the theme. */}
+      <StatusBar style="light" />
 
-        <View style={{ flex: 1 }} />
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: hero.slab,
+            // The hero's own corners, so the pinned bar reads as the hero's
+            // slab held in place rather than a strip laid over the page.
+            borderBottomLeftRadius: radius.xl,
+            borderBottomRightRadius: radius.xl,
+          },
+          fillStyle,
+        ]}
+      />
 
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel="List your property"
-          onPress={onListProperty}
-          activeScale={0.96}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          height: mockPx(HEADER_ROW_PX),
+          paddingLeft: mockPx(40),
+          paddingRight: mockPx(30),
+        }}
+      >
+        {/* Identity: the website's wordmark, and what it stands for. */}
+        <View style={{ flex: 1 }}>
+          <ExpoImage
+            source={require('../../../../assets/home/brand/logo.png')}
+            style={{ width: mockPx(LOGO_WIDTH_PX), height: mockPx(LOGO_HEIGHT_PX) }}
+            contentFit="contain"
+            contentPosition="left"
+            accessibilityLabel="DealDirect"
+            cachePolicy="memory"
+          />
+        </View>
+
+        {/* The controls sit on the wordmark's line, not the block's centre. */}
+        <View
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 6,
-            height: 34,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.full,
-            backgroundColor: theme.colors.surface,
+            height: mockPx(LOGO_HEIGHT_PX),
+            marginTop: mockPx(-8),
+            gap: mockPx(14),
           }}
         >
-          <Ionicons name="add" size={15} color={theme.colors.brand} />
-          <Text variant="footnote" style={{ color: theme.colors.brand, fontWeight: '700' }}>
-            List property
-          </Text>
-        </PressableScale>
+          {canList && onAddListing ? (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel="Add your listing"
+              onPress={onAddListing}
+              activeScale={0.96}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: mockPx(8),
+                height: mockPx(48),
+                paddingHorizontal: mockPx(18),
+                borderRadius: mockPx(24),
+                backgroundColor: theme.colors.brand,
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={mockPx(22)} color={HERO_TEXT} />
+              <Text
+                variant="bodyEmphasis"
+                numberOfLines={1}
+                style={{ color: HERO_TEXT, fontSize: mockPx(21), lineHeight: mockPx(26) }}
+              >
+                Add listing
+              </Text>
+            </PressableScale>
+          ) : (
+            <PressableScale
+              accessibilityRole="button"
+              accessibilityLabel={
+                city ? `Searching in ${city.label}. Change city` : 'Choose a city to search in'
+              }
+              onPress={onOpenCityPicker}
+              activeScale={0.96}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: mockPx(8),
+                height: mockPx(48),
+                maxWidth: mockPx(210),
+                paddingHorizontal: mockPx(16),
+                borderRadius: mockPx(24),
+                backgroundColor: HERO_HEADER_GLASS,
+              }}
+            >
+              <Ionicons name="location-outline" size={mockPx(22)} color={HERO_HEADER_INK} />
+              <Text
+                variant="bodyEmphasis"
+                numberOfLines={1}
+                style={{ color: HERO_HEADER_INK, fontSize: mockPx(21), lineHeight: mockPx(26), flexShrink: 1 }}
+              >
+                {city ? city.label : 'All cities'}
+              </Text>
+              <Ionicons name="chevron-down" size={mockPx(18)} color={HERO_HEADER_INK} />
+            </PressableScale>
+          )}
 
-        <PressableScale
-          accessibilityRole="button"
-          accessibilityLabel={hasUnread ? 'Updates, you have unread items' : 'Updates'}
-          hitSlop={gesture.hitSlop}
-          onPress={onOpenUpdates}
-          activeScale={0.94}
-          style={{
-            width: 34,
-            height: 34,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: radius.full,
-            borderWidth: 1,
-            borderColor: withAlpha(theme.colors.textOnAccent, 0.35),
-          }}
-        >
-          <Ionicons name="notifications-outline" size={17} color={theme.colors.textOnAccent} />
-          {hasUnread ? (
-            <View style={[styles.dot, { backgroundColor: theme.colors.textOnAccent }]} />
-          ) : null}
-        </PressableScale>
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel={hasUnread ? 'Updates, you have unread items' : 'Updates'}
+            hitSlop={gesture.hitSlop}
+            onPress={onOpenUpdates}
+            activeScale={0.94}
+            style={control}
+          >
+            <Ionicons name="notifications-outline" size={mockPx(32)} color={HERO_HEADER_INK} />
+            {hasUnread ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: mockPx(12),
+                  right: mockPx(14),
+                  width: mockPx(12),
+                  height: mockPx(12),
+                  borderRadius: mockPx(6),
+                  backgroundColor: '#F33F40',
+                }}
+              />
+            ) : null}
+          </PressableScale>
+
+          <PressableScale
+            accessibilityRole="button"
+            accessibilityLabel="Your account"
+            hitSlop={gesture.hitSlop}
+            onPress={onOpenProfile}
+            activeScale={0.94}
+            style={{ ...control, backgroundColor: HERO_TEXT }}
+          >
+            {name ? (
+              <Avatar uri={avatarUri} name={name} size="sm" />
+            ) : (
+              <Ionicons name="person-outline" size={mockPx(32)} color={HERO_HEADER_INK} />
+            )}
+          </PressableScale>
+        </View>
       </View>
 
-      {/*
-        The pinned copy of the hero's field. Same component, same geometry —
-        see the handover note at the top of this file for why that is the
-        requirement rather than a convenience.
-
-        `overflow: 'hidden'` keeps it clipped to zero before the pin, which is
-        also what stops the not-yet-pinned copy from taking taps meant for the
-        hero underneath: a zero-height clipped box has no touch area. While
-        focused the height is the full screen, so the panel inside is genuinely
-        contained and tappable on Android.
-      */}
-      <Animated.View style={[styles.searchRow, searchRowStyle]}>
+      {/* The pinned copy of the hero's field. Same component, same geometry.
+          `overflow: 'hidden'` keeps it clipped to zero before the pin, which
+          is also what stops the not-yet-pinned copy from taking taps meant for
+          the hero underneath. */}
+      <Animated.View style={[styles.searchRow, { paddingHorizontal: mockPx(34) }, searchRowStyle]}>
         <HomeSearchField
           city={city}
           value={searchValue}
@@ -275,8 +337,6 @@ export function HomeHeader({
           onSubmit={onSubmitSearch}
           onOpenProperty={onOpenProperty}
           onFocusChange={setSearchFocused}
-          // No top margin here: the field's top edge has to land exactly on
-          // this bar's bottom edge, which is where the hero's copy arrives.
           flush
         />
       </Animated.View>
@@ -290,34 +350,9 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    // Above the scroll content, below any sheet or modal.
     zIndex: 10,
-    // No shadow. The header and the hero beneath it are the same brand red, so
-    // a drop shadow here casts a dark band onto an identical-coloured surface
-    // and reads as a seam — the exact mismatch it looks like it should prevent.
-    // Once scrolled, the header floats over the near-black page where a black
-    // shadow is invisible regardless, so it was never buying separation. The
-    // colour boundary against the content carries the header on its own.
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    height: HOME_HEADER_ROW,
-    paddingHorizontal: screenPadding,
   },
   searchRow: {
     overflow: 'hidden',
-    // Matches the hero's own horizontal inset, so the pill's left and right
-    // edges land on the same pixels its hero copy occupied.
-    paddingHorizontal: screenPadding,
-  },
-  dot: {
-    position: 'absolute',
-    top: 6,
-    right: 7,
-    width: 7,
-    height: 7,
-    borderRadius: radius.full,
   },
 });
